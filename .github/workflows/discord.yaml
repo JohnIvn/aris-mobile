@@ -166,18 +166,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          node-version: 22
+          channel: stable
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: flutter pub get
 
       - name: Detect sensitive files
         id: scan
@@ -195,7 +190,7 @@ jobs:
         id: lint
         continue-on-error: true
         run: |
-          npm run lint > lint.log 2>&1 || status=$?
+          flutter analyze > lint.log 2>&1 || status=$?
           cat lint.log
           if [ -n "${status:-}" ]; then exit $status; fi
 
