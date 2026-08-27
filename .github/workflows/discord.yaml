@@ -1,0 +1,361 @@
+name: Discord Notification
+
+on:
+  push:
+  pull_request:
+  release:
+
+jobs:
+  discord:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Discord message
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+
+          case "$GITHUB_REPOSITORY" in
+            *aris-mobile*) COLOR=16711680;;
+            *aris-vista*) COLOR=65280;;
+            *) COLOR=255;;
+          esac
+
+          JSON=$(jq -n \
+            --arg title "GitHub Event: $GITHUB_EVENT_NAME" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg user "$GITHUB_ACTOR" \
+            --arg branch "$GITHUB_REF_NAME" \
+            --arg sha "$GITHUB_SHA" \
+            --arg message "$COMMIT_MESSAGE" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA" \
+            --arg time "$(date -u)" \
+            --arg color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                color: $color,
+                fields: [
+                  {
+                    name: "Repository",
+                    value: $repo,
+                    inline: true
+                  },
+                  {
+                    name: "User",
+                    value: $user,
+                    inline: true
+                  },
+                  {
+                    name: "Branch",
+                    value: $branch,
+                    inline: true
+                  },
+                  {
+                    name: "Commit SHA",
+                    value: $sha,
+                    inline: false
+                  },
+                  {
+                    name: "Commit Message",
+                    value: $message,
+                    inline: false
+                  },
+                  {
+                    name: "Commit URL",
+                    value: $url,
+                    inline: false
+                  },
+                  {
+                    name: "Time",
+                    value: $time,
+                    inline: false
+                  }
+                ]
+              }]
+            }')
+
+          curl \
+          -H "Content-Type: application/json" \
+          -d "$JSON" \
+          "$DISCORD_WEBHOOK"
+
+  release:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Release message
+        env:
+          DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+        run: |
+
+          case "$GITHUB_REPOSITORY" in
+            *aris-app*) COLOR=16711680;;
+            *aris-vista*) COLOR=65280;;
+            *) COLOR=255;;
+          esac
+
+          JSON=$(jq -n \
+            --arg title "GitHub Event: release" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg user "$GITHUB_ACTOR" \
+            --arg branch "$GITHUB_REF_NAME" \
+            --arg release "${{ github.event.release.tag_name }}" \
+            --arg notes "${{ github.event.release.body }}" \
+            --arg url "${{ github.event.release.html_url }}" \
+            --arg time "$(date -u)" \
+            --arg color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                color: $color,
+                fields: [
+                  {
+                    name: "Repository",
+                    value: $repo,
+                    inline: true
+                  },
+                  {
+                    name: "User",
+                    value: $user,
+                    inline: true
+                  },
+                  {
+                    name: "Branch",
+                    value: $branch,
+                    inline: true
+                  },
+                  {
+                    name: "Release",
+                    value: $release,
+                    inline: false
+                  },
+                  {
+                    name: "Release Notes",
+                    value: $notes,
+                    inline: false
+                  },
+                  {
+                    name: "Release URL",
+                    value: $url,
+                    inline: false
+                  },
+                  {
+                    name: "Time",
+                    value: $time,
+                    inline: false
+                  }
+                ]
+              }]
+            }')
+
+          curl \
+          -H "Content-Type: application/json" \
+          -d "$JSON" \
+          "$DISCORD_RELEASE_WEBHOOK"
+
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Detect sensitive files
+        id: scan
+        run: |
+          FOUND=$(git ls-tree -r HEAD --name-only | grep -E "node_modules|\.env|\.pem|\.key|secret|password" || true)
+
+          if [ -n "$FOUND" ]; then
+            echo "detected=true" >> $GITHUB_OUTPUT
+            echo "$FOUND" > detected.txt
+          else
+            echo "detected=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run lint
+        id: lint
+        continue-on-error: true
+        run: |
+          npm run lint > lint.log 2>&1 || status=$?
+          cat lint.log
+          if [ -n "${status:-}" ]; then exit $status; fi
+
+      - name: Send Lint Alert
+        if: steps.lint.outcome == 'failure'
+        env:
+          DISCORD_SECURITY_WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+
+          ERRORS=$(grep -E "error" lint.log || true)
+          if [ -z "$ERRORS" ]; then
+            ERRORS="Linter reported a failure (see actions log)."
+          fi
+
+          case "$GITHUB_REPOSITORY" in
+            *aris-app*) COLOR=16711680;;
+            *aris-vista*) COLOR=65280;;
+            *) COLOR=255;;
+          esac
+
+          JSON=$(jq -n \
+            --arg title "Lint Check Failed" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg user "$GITHUB_ACTOR" \
+            --arg branch "$GITHUB_REF_NAME" \
+            --arg errors "$ERRORS" \
+            --arg sha "$GITHUB_SHA" \
+            --arg message "$COMMIT_MESSAGE" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA" \
+            --arg time "$(date -u)" \
+            --arg color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                color: $color,
+                fields: [
+                  {
+                    name: "Repository",
+                    value: $repo,
+                    inline: true
+                  },
+                  {
+                    name: "User",
+                    value: $user,
+                    inline: true
+                  },
+                  {
+                    name: "Branch",
+                    value: $branch,
+                    inline: true
+                  },
+                  {
+                    name: "Lint Errors",
+                    value: $errors,
+                    inline: false
+                  },
+                  {
+                    name: "Commit SHA",
+                    value: $sha,
+                    inline: false
+                  },
+                  {
+                    name: "Commit Message",
+                    value: $message,
+                    inline: false
+                  },
+                  {
+                    name: "Commit URL",
+                    value: $url,
+                    inline: false
+                  },
+                  {
+                    name: "Time",
+                    value: $time,
+                    inline: false
+                  }
+                ]
+              }]
+            }')
+
+          curl \
+          -H "Content-Type: application/json" \
+          -d "$JSON" \
+          "$DISCORD_SECURITY_WEBHOOK"
+
+      - name: Send Security Alert
+        if: steps.scan.outputs.detected == 'true'
+        env:
+          DISCORD_SECURITY_WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+
+          FILES=$(cat detected.txt)
+
+          case "$GITHUB_REPOSITORY" in
+            *aris-app*) COLOR=16711680;;
+            *aris-vista*) COLOR=65280;;
+            *) COLOR=255;;
+          esac
+
+          JSON=$(jq -n \
+            --arg title "GitHub Event: security" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg user "$GITHUB_ACTOR" \
+            --arg branch "$GITHUB_REF_NAME" \
+            --arg files "$FILES" \
+            --arg sha "$GITHUB_SHA" \
+            --arg message "$COMMIT_MESSAGE" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA" \
+            --arg time "$(date -u)" \
+            --arg color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                color: $color,
+                fields: [
+                  {
+                    name: "Repository",
+                    value: $repo,
+                    inline: true
+                  },
+                  {
+                    name: "User",
+                    value: $user,
+                    inline: true
+                  },
+                  {
+                    name: "Branch",
+                    value: $branch,
+                    inline: true
+                  },
+                  {
+                    name: "Detected Files",
+                    value: $files,
+                    inline: false
+                  },
+                  {
+                    name: "Commit SHA",
+                    value: $sha,
+                    inline: false
+                  },
+                  {
+                    name: "Commit Message",
+                    value: $message,
+                    inline: false
+                  },
+                  {
+                    name: "Commit URL",
+                    value: $url,
+                    inline: false
+                  },
+                  {
+                    name: "Time",
+                    value: $time,
+                    inline: false
+                  }
+                ]
+              }]
+            }')
+
+          curl \
+          -H "Content-Type: application/json" \
+          -d "$JSON" \
+          "$DISCORD_SECURITY_WEBHOOK"
