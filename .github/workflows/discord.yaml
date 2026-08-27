@@ -1,3 +1,5 @@
+# GitHub Discord Notification Workflow
+
 name: Discord Notification
 
 on:
@@ -18,9 +20,9 @@ jobs:
         run: |
 
           case "$GITHUB_REPOSITORY" in
-            *aris-mobile*) COLOR=16711680;;
-            *aris-vista*) COLOR=65280;;
-            *) COLOR=255;;
+            *aris-mobile*) COLOR=10246582;;  
+            *aris-vista*) COLOR=65280;;      
+            *) COLOR=16776960;;                   
           esac
 
           JSON=$(jq -n \
@@ -290,7 +292,7 @@ jobs:
           FILES=$(cat detected.txt)
 
           case "$GITHUB_REPOSITORY" in
-            *aris-app*) COLOR=16711680;;
+            *aris-app*) COLOR=10246582;;
             *aris-vista*) COLOR=65280;;
             *) COLOR=255;;
           esac
