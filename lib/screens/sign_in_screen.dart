@@ -4,6 +4,8 @@ import '../services/auth_scope.dart';
 import '../services/auth_service.dart';
 import '../theme/theme_scope.dart';
 
+import 'package:flutter_svg/flutter_svg.dart';
+
 class SignInScreen extends StatelessWidget {
   const SignInScreen({super.key});
 
@@ -21,11 +23,7 @@ class SignInScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image(
-                image: AssetImage('assets/aris_title.png'),
-                width: 1028,
-                height: 72,
-              ),
+              SvgPicture.asset('assets/aris_title.svg', width: 72, height: 72),
               const SizedBox(height: 20),
               Text(
                 'Track your Accomplishment Reports and DTR status in one place.',
