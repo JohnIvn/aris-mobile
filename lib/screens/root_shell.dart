@@ -5,12 +5,14 @@ import '../widgets/app_bottom_nav.dart';
 import 'dtr_screen.dart';
 import 'home_screen.dart';
 import 'notifications_screen.dart';
+import 'payroll_screen.dart';
 import 'profile_screen.dart';
 import 'reports_screen.dart';
 
 /// Top-level scaffold: owns the bottom nav and swaps between the
-/// five main tabs. Deep-linking (e.g. from a notification into a
-/// specific report) goes through [goToReports].
+/// six main tabs. Deep-linking (e.g. from a notification into a
+/// specific report) goes through [goToReports]; [goToPayroll] jumps
+/// straight to the Payroll tab.
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
 
@@ -29,13 +31,20 @@ class _RootShellState extends State<RootShell> {
     });
   }
 
+  void goToPayroll() {
+    setState(() {
+      _index = 3;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
     final screens = [
-      HomeScreen(onSeeReports: goToReports),
+      HomeScreen(onSeeReports: goToReports, onSeePayroll: goToPayroll),
       ReportsScreen(focusedReportId: _focusedReportId),
       const DtrScreen(),
+      const PayrollScreen(),
       NotificationsScreen(onOpenReport: (id) => goToReports(reportId: id)),
       const ProfileScreen(),
     ];

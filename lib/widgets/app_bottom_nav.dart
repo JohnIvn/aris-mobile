@@ -16,6 +16,7 @@ class AppBottomNav extends StatelessWidget {
     (icon: Icons.home_rounded, label: 'Home'),
     (icon: Icons.description_rounded, label: 'Reports'),
     (icon: Icons.access_time_rounded, label: 'DTR'),
+    (icon: Icons.payments_rounded, label: 'Payroll'),
     (icon: Icons.notifications_rounded, label: 'Notifications'),
     (icon: Icons.person_rounded, label: 'Profile'),
   ];
@@ -44,15 +45,15 @@ class AppBottomNav extends StatelessWidget {
                     children: [
                       Icon(item.icon, color: color, size: 24),
                       const SizedBox(height: 2),
-                      Text(
-                        item.label,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 11,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w400,
-                        ),
-                      ),
+                      // Text(
+                      //   item.label,
+                      //   style: TextStyle(
+                      //     color: color,
+                      //     fontSize: 11,
+                      //     fontWeight:
+                      //     selected ? FontWeight.w700 : FontWeight.w400,
+                      //   ),
+                      // ),
                     ],
                   ),
                 ),

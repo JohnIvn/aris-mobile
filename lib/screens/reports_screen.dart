@@ -102,25 +102,6 @@ class ReportsScreen extends StatelessWidget {
                               TextStyle(color: colors.error, fontSize: 12),
                             ),
                           ],
-                          if (report.stage == PipelineStage.completed) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Payroll',
-                                  style: TextStyle(
-                                    color: colors.textSecondary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                StatusBadge(
-                                  label: report.payrollStatus.label,
-                                  kind: report.payrollStatus.colorKind,
-                                ),
-                              ],
-                            ),
-                          ],
                         ],
                       ),
                     ),

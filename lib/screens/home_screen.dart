@@ -10,8 +10,13 @@ import '../widgets/status_badge.dart';
 
 class HomeScreen extends StatelessWidget {
   final void Function({String? reportId}) onSeeReports;
+  final VoidCallback onSeePayroll;
 
-  const HomeScreen({super.key, required this.onSeeReports});
+  const HomeScreen({
+    super.key,
+    required this.onSeeReports,
+    required this.onSeePayroll,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -60,11 +65,14 @@ class HomeScreen extends StatelessWidget {
                   latest.stage.colorKind,
                 ),
                 const SizedBox(height: 8),
-                _statusRow(
-                  colors,
-                  'Payroll',
-                  latest.payrollStatus.label,
-                  latest.payrollStatus.colorKind,
+                GestureDetector(
+                  onTap: onSeePayroll,
+                  child: _statusRow(
+                    colors,
+                    'Payroll',
+                    latest.payrollStatus.label,
+                    latest.payrollStatus.colorKind,
+                  ),
                 ),
               ],
             ),
@@ -92,6 +100,23 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Text(
                   'View all reports',
+                  style: TextStyle(
+                    color: colors.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Icon(Icons.arrow_forward, color: colors.accent, size: 16),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: onSeePayroll,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'View payroll',
                   style: TextStyle(
                     color: colors.accent,
                     fontWeight: FontWeight.w600,
