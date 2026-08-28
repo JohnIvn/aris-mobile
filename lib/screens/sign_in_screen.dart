@@ -60,7 +60,7 @@ class SignInScreen extends StatelessWidget {
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Continue with your Government Email'),
+                      : const Text('Continue with Google'),
                 ),
               ),
               const SizedBox(height: 16),

@@ -31,6 +31,8 @@ extension PipelineStageX on PipelineStage {
     }
   }
 
+
+
   /// Which status color this stage should render with — screens
   /// read `colors.<field>` via this instead of hardcoding a color.
   StatusColorKind get colorKind {

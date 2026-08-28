@@ -68,15 +68,18 @@ class DtrScreen extends StatelessWidget {
           ),
           SectionCard(
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  'DTR Status',
-                  style:
-                      TextStyle(color: colors.text, fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    'DTR Status',
+                    style: TextStyle(color: colors.text, fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                 ),
-                StatusBadge(
-                    label: overallStage.label, kind: overallStage.colorKind),
+                const SizedBox(width: 8),
+                StatusBadge(label: overallStage.label, kind: overallStage.colorKind),
               ],
             ),
           ),

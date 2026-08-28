@@ -96,9 +96,17 @@ class HomeScreen extends StatelessWidget {
 
   Widget _statusRow(AppColors colors, String label, PipelineStage stage) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(label, style: TextStyle(color: colors.text, fontSize: 14)),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(color: colors.text, fontSize: 14),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+        const SizedBox(width: 8),
         StatusBadge(label: stage.label, kind: stage.colorKind),
       ],
     );
