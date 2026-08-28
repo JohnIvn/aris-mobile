@@ -18,20 +18,61 @@ class MockDataService {
         periodLabel: 'Aug 16 – Aug 31',
         stage: PipelineStage.hr,
         updatedAt: DateTime(2026, 8, 27),
+        professorName: 'Matthew D. Santos',
+        professorId: 'PROF-00214',
+        department: 'College of Computer Studies',
+        position: 'Part-time Instructor',
+        shiftDate: DateTime(2026, 8, 27),
+        reportNarrative:
+            'Conducted lecture and lab sessions for IT elective courses, '
+            'consulted with 3 thesis groups, and finalized midterm exam '
+            'materials for submission to the department.',
+        dtrTotalHours: 62.5,
+        arTaskTally: 9,
       ),
       ReportItem(
         id: 'ar-2026-08a',
         periodLabel: 'Aug 1 – Aug 15',
         stage: PipelineStage.completed,
         updatedAt: DateTime(2026, 8, 16),
+        professorName: 'Matthew D. Santos',
+        professorId: 'PROF-00214',
+        department: 'College of Computer Studies',
+        position: 'Part-time Instructor',
+        shiftDate: DateTime(2026, 8, 15),
+        reportNarrative:
+            'Delivered scheduled lectures, proctored the first long exam, '
+            'and submitted grade sheets for the previous grading period.',
+        dtrTotalHours: 64.0,
+        arTaskTally: 11,
       ),
       ReportItem(
         id: 'ar-2026-07b',
         periodLabel: 'Jul 16 – Jul 31',
         stage: PipelineStage.rejected,
         updatedAt: DateTime(2026, 8, 1),
+        rejectionRemarks:
+            'DTR hours for Jul 22 do not match biometric logs. Please '
+            'reconcile the discrepancy and resubmit.',
+        professorName: 'Matthew D. Santos',
+        professorId: 'PROF-00214',
+        department: 'College of Computer Studies',
+        position: 'Part-time Instructor',
+        shiftDate: DateTime(2026, 7, 31),
+        reportNarrative:
+            'Held regular class sessions and consultation hours; assisted '
+            'in department accreditation document preparation.',
+        dtrTotalHours: 58.0,
+        arTaskTally: 7,
       ),
     ];
+  }
+
+  ReportItem? getReportById(String id) {
+    for (final report in getReports()) {
+      if (report.id == id) return report;
+    }
+    return null;
   }
 
   List<DtrEntry> getDtrEntries() {
