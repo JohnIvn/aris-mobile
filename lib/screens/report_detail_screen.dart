@@ -34,10 +34,7 @@ class ReportDetailScreen extends StatelessWidget {
                 'Updated ${_formatDate(report.updatedAt)}',
                 style: TextStyle(color: colors.textSecondary, fontSize: 12),
               ),
-              StatusBadge(
-                label: report.stage.label,
-                kind: report.stage.colorKind,
-              ),
+              StatusBadge(label: report.stage.label, kind: report.stage.colorKind),
             ],
           ),
           const SizedBox(height: 12),
@@ -67,6 +64,46 @@ class ReportDetailScreen extends StatelessWidget {
             ),
           ),
           SectionCard(
+            title: 'Payroll',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Status',
+                      style: TextStyle(color: colors.text, fontSize: 13),
+                    ),
+                    StatusBadge(
+                      label: report.payrollStatus.label,
+                      kind: report.payrollStatus.colorKind,
+                    ),
+                  ],
+                ),
+                if (report.payrollAvailableAt != null) ...[
+                  const SizedBox(height: 8),
+                  _detailRow(colors, 'Available Since',
+                      _formatDate(report.payrollAvailableAt!)),
+                ],
+                if (report.payrollReceivedAt != null) ...[
+                  const SizedBox(height: 4),
+                  _detailRow(colors, 'Received On',
+                      _formatDate(report.payrollReceivedAt!)),
+                ],
+                if (report.payrollStatus == PayrollStatus.notAvailable) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Payroll unlocks once Department, HR, and Accounting '
+                        'have all verified this period\'s AR & DTR.',
+                    style:
+                    TextStyle(color: colors.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          SectionCard(
             title: 'Report Details',
             child: Column(
               children: [
@@ -74,11 +111,7 @@ class ReportDetailScreen extends StatelessWidget {
                 _detailRow(colors, 'Professor ID', report.professorId),
                 _detailRow(colors, 'Department', report.department),
                 _detailRow(colors, 'Position', report.position),
-                _detailRow(
-                  colors,
-                  'Date of Shift',
-                  _formatDate(report.shiftDate),
-                ),
+                _detailRow(colors, 'Date of Shift', _formatDate(report.shiftDate)),
               ],
             ),
           ),
@@ -99,9 +132,9 @@ class ReportDetailScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colors.error.withOpacity(0.08),
+        color: colors.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.error.withOpacity(0.4)),
+        border: Border.all(color: colors.error.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,19 +148,12 @@ class ReportDetailScreen extends StatelessWidget {
                 Text(
                   'Rejection Remarks',
                   style: TextStyle(
-                    color: colors.error,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
+                      color: colors.error, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   remarks,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
+                  style: TextStyle(color: colors.text, fontSize: 13, height: 1.4),
                 ),
               ],
             ),
@@ -137,26 +163,15 @@ class ReportDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _tallyStat(
-    AppColors colors, {
-    required String label,
-    required String value,
-  }) {
+  Widget _tallyStat(AppColors colors, {required String label, required String value}) {
     return Column(
       children: [
         Text(
           value,
-          style: TextStyle(
-            color: colors.text,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: colors.text, fontSize: 20, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(color: colors.textSecondary, fontSize: 12),
-        ),
+        Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12)),
       ],
     );
   }
@@ -168,19 +183,12 @@ class ReportDetailScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(color: colors.textSecondary, fontSize: 13),
-          ),
+          Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 13)),
           Flexible(
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: TextStyle(
-                color: colors.text,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(color: colors.text, fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -190,18 +198,8 @@ class ReportDetailScreen extends StatelessWidget {
 
   String _formatDate(DateTime d) {
     const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }

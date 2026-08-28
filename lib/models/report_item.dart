@@ -25,6 +25,12 @@ class ReportItem {
   /// Total Tally of the ARs (accomplishments/tasks logged) for the period.
   final int arTaskTally;
 
+  /// Only reaches [PayrollStatus.available] once [stage] is
+  /// [PipelineStage.completed] (all three admins verified).
+  final PayrollStatus payrollStatus;
+  final DateTime? payrollAvailableAt;
+  final DateTime? payrollReceivedAt;
+
   const ReportItem({
     required this.id,
     required this.periodLabel,
@@ -39,6 +45,9 @@ class ReportItem {
     required this.reportNarrative,
     required this.dtrTotalHours,
     required this.arTaskTally,
+    required this.payrollStatus,
+    this.payrollAvailableAt,
+    this.payrollReceivedAt,
   });
 }
 

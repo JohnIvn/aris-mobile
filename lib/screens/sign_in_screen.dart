@@ -45,7 +45,7 @@ class SignInScreen extends StatelessWidget {
                   onPressed: isLoading ? null : auth.signInWithOAuth,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colors.accent,
-                    disabledBackgroundColor: colors.accent.withOpacity(0.6),
+                    disabledBackgroundColor: colors.accent.withValues(alpha: 0.6),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),

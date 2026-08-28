@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/report_item.dart';
 import '../models/status.dart';
 import '../services/mock_data_service.dart';
 import '../theme/app_colors.dart';
@@ -18,7 +19,7 @@ class HomeScreen extends StatelessWidget {
     final data = MockDataService();
     final reports = data.getReports();
     final latest = reports.first;
-    final dtrStage = data.getDtrOverallStage();
+    final next = _nextAction(latest);
 
     return Container(
       color: colors.bgPrimary,
@@ -50,11 +51,21 @@ class HomeScreen extends StatelessWidget {
             title: 'Submission Status',
             child: Column(
               children: [
-                _statusRow(colors, 'Accomplishment Report', latest.stage),
+                // AR and DTR are submitted and verified together, so
+                // they share a single stage instead of two rows.
+                _statusRow(
+                  colors,
+                  'AR & DTR',
+                  latest.stage.label,
+                  latest.stage.colorKind,
+                ),
                 const SizedBox(height: 8),
-                _statusRow(colors, 'DTR', dtrStage),
-                const SizedBox(height: 8),
-                _statusRow(colors, 'Payroll', PipelineStage.accounting),
+                _statusRow(
+                  colors,
+                  'Payroll',
+                  latest.payrollStatus.label,
+                  latest.payrollStatus.colorKind,
+                ),
               ],
             ),
           ),
@@ -62,12 +73,13 @@ class HomeScreen extends StatelessWidget {
             title: 'Next Action',
             child: Row(
               children: [
-                Icon(Icons.check_circle_outline,
-                    color: colors.accent, size: 18),
+                Icon(next.icon, color: next.color(colors), size: 18),
                 const SizedBox(width: 8),
-                Text(
-                  'No action required',
-                  style: TextStyle(color: colors.text, fontSize: 14),
+                Expanded(
+                  child: Text(
+                    next.text,
+                    style: TextStyle(color: colors.text, fontSize: 14),
+                  ),
                 ),
               ],
             ),
@@ -94,7 +106,12 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _statusRow(AppColors colors, String label, PipelineStage stage) {
+  Widget _statusRow(
+      AppColors colors,
+      String label,
+      String value,
+      StatusColorKind kind,
+      ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -107,9 +124,73 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        StatusBadge(label: stage.label, kind: stage.colorKind),
+        StatusBadge(label: value, kind: kind),
       ],
     );
+  }
+
+  /// What to show in "Next Action", driven by the combined AR+DTR
+  /// stage and — once that's completed — the payroll status.
+  _NextAction _nextAction(ReportItem latest) {
+    switch (latest.stage) {
+      case PipelineStage.rejected:
+        return _NextAction(
+          Icons.error_outline,
+          'Resubmit corrected AR & DTR',
+              (c) => c.error,
+        );
+      case PipelineStage.draft:
+        return _NextAction(
+          Icons.edit_outlined,
+          'Finish and submit your AR & DTR',
+              (c) => c.warning,
+        );
+      case PipelineStage.submitted:
+        return _NextAction(
+          Icons.hourglass_empty,
+          'Submitted — awaiting Department Secretary verification',
+              (c) => c.warning,
+        );
+      case PipelineStage.department:
+        return _NextAction(
+          Icons.hourglass_empty,
+          'Awaiting Department Secretary verification',
+              (c) => c.warning,
+        );
+      case PipelineStage.hr:
+        return _NextAction(
+          Icons.hourglass_empty,
+          'Awaiting HR verification',
+              (c) => c.warning,
+        );
+      case PipelineStage.accounting:
+        return _NextAction(
+          Icons.hourglass_empty,
+          'Awaiting Accounting verification',
+              (c) => c.warning,
+        );
+      case PipelineStage.completed:
+        switch (latest.payrollStatus) {
+          case PayrollStatus.available:
+            return _NextAction(
+              Icons.payments_outlined,
+              'Payroll is available for release',
+                  (c) => c.info,
+            );
+          case PayrollStatus.received:
+            return _NextAction(
+              Icons.check_circle_outline,
+              'No action required',
+                  (c) => c.accent,
+            );
+          case PayrollStatus.notAvailable:
+            return _NextAction(
+              Icons.hourglass_empty,
+              'Fully verified — payroll is being processed',
+                  (c) => c.warning,
+            );
+        }
+    }
   }
 
   String _formattedToday() {
@@ -120,4 +201,12 @@ class HomeScreen extends StatelessWidget {
     ];
     return '${months[now.month - 1]} ${now.day}, ${now.year}';
   }
+}
+
+class _NextAction {
+  final IconData icon;
+  final String text;
+  final Color Function(AppColors colors) color;
+
+  const _NextAction(this.icon, this.text, this.color);
 }

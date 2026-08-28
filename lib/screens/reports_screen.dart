@@ -23,18 +23,13 @@ class ReportsScreen extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Reports',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+            child: Text(
+              'Reports',
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           Expanded(
@@ -56,12 +51,10 @@ class ReportsScreen extends StatelessWidget {
                     child: Container(
                       decoration: isFocused
                           ? BoxDecoration(
-                              border: Border.all(
-                                color: colors.accent,
-                                width: 1.5,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                            )
+                        border: Border.all(
+                            color: colors.accent, width: 1.5),
+                        borderRadius: BorderRadius.circular(10),
+                      )
                           : null,
                       padding: isFocused
                           ? const EdgeInsets.all(8)
@@ -105,10 +98,27 @@ class ReportsScreen extends StatelessWidget {
                               report.rejectionRemarks!,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: colors.error,
-                                fontSize: 12,
-                              ),
+                              style:
+                              TextStyle(color: colors.error, fontSize: 12),
+                            ),
+                          ],
+                          if (report.stage == PipelineStage.completed) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Payroll',
+                                  style: TextStyle(
+                                    color: colors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                StatusBadge(
+                                  label: report.payrollStatus.label,
+                                  kind: report.payrollStatus.colorKind,
+                                ),
+                              ],
                             ),
                           ],
                         ],

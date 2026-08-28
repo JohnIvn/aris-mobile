@@ -1,6 +1,9 @@
 /// Shared pipeline: Draft -> Submitted -> Department -> HR ->
-/// Accounting -> Completed. Used by both AR and DTR so the
-/// dashboard can render them consistently.
+/// Accounting -> Completed. The AR and DTR for a period are
+/// submitted together and move through this pipeline together —
+/// there's no separate AR-only or DTR-only stage. Completed means
+/// all three admins (Department Secretary, HR, Accounting) have
+/// verified, which is also what unlocks [PayrollStatus.available].
 enum PipelineStage {
   draft,
   submitted,
@@ -31,8 +34,6 @@ extension PipelineStageX on PipelineStage {
     }
   }
 
-
-
   /// Which status color this stage should render with — screens
   /// read `colors.<field>` via this instead of hardcoding a color.
   StatusColorKind get colorKind {
@@ -54,3 +55,33 @@ extension PipelineStageX on PipelineStage {
 }
 
 enum StatusColorKind { success, warning, error, info, neutral }
+
+/// Payroll only ever reaches [available] once the AR+DTR
+/// [PipelineStage] for that period is `completed` — i.e. all three
+/// admins have verified. [received] is a separate, later state once
+/// the professor has actually gotten paid.
+enum PayrollStatus { notAvailable, available, received }
+
+extension PayrollStatusX on PayrollStatus {
+  String get label {
+    switch (this) {
+      case PayrollStatus.notAvailable:
+        return 'Not Yet Available';
+      case PayrollStatus.available:
+        return 'Available for Release';
+      case PayrollStatus.received:
+        return 'Received';
+    }
+  }
+
+  StatusColorKind get colorKind {
+    switch (this) {
+      case PayrollStatus.notAvailable:
+        return StatusColorKind.neutral;
+      case PayrollStatus.available:
+        return StatusColorKind.info;
+      case PayrollStatus.received:
+        return StatusColorKind.success;
+    }
+  }
+}
