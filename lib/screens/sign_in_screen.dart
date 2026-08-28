@@ -21,26 +21,12 @@ class SignInScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 72,
+              Image(
+                image: AssetImage('assets/aris_title.png'),
+                width: 1028,
                 height: 72,
-                decoration: BoxDecoration(
-                  color: colors.accent,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(Icons.fact_check_rounded,
-                    color: Colors.white, size: 36),
               ),
               const SizedBox(height: 20),
-              Text(
-                'ARIS',
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
               Text(
                 'Track your Accomplishment Reports and DTR status in one place.',
                 textAlign: TextAlign.center,
@@ -64,7 +50,8 @@ class SignInScreen extends StatelessWidget {
                     disabledBackgroundColor: colors.accent.withOpacity(0.6),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: isLoading
                       ? const SizedBox(
@@ -75,7 +62,7 @@ class SignInScreen extends StatelessWidget {
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Continue with OAuth'),
+                      : const Text('Continue with your Government Email'),
                 ),
               ),
               const SizedBox(height: 16),
