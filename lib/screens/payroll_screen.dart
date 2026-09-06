@@ -9,22 +9,48 @@ import '../widgets/section_card.dart';
 import '../widgets/status_badge.dart';
 import 'report_detail_screen.dart';
 
-class PayrollScreen extends StatelessWidget {
+class PayrollScreen extends StatefulWidget {
   const PayrollScreen({super.key});
+
+  @override
+  State<PayrollScreen> createState() => _PayrollScreenState();
+}
+
+class _PayrollScreenState extends State<PayrollScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  PayrollStatus? _filterStatus; // null = All
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final reports = MockDataService().getReports();
+    final allReports = MockDataService().getReports();
 
-    final available = reports
+    // Overview counts always reflect everything, regardless of the
+    // current search/filter narrowing the list below.
+    final available = allReports
         .where((r) => r.payrollStatus == PayrollStatus.available)
         .length;
-    final received =
-        reports.where((r) => r.payrollStatus == PayrollStatus.received).length;
-    final pending = reports
+    final received = allReports
+        .where((r) => r.payrollStatus == PayrollStatus.received)
+        .length;
+    final pending = allReports
         .where((r) => r.payrollStatus == PayrollStatus.notAvailable)
         .length;
+
+    final reports = allReports.where((r) {
+      final matchesQuery =
+          _query.isEmpty || r.periodLabel.toLowerCase().contains(_query);
+      final matchesFilter =
+          _filterStatus == null || r.payrollStatus == _filterStatus;
+      return matchesQuery && matchesFilter;
+    }).toList();
 
     return Container(
       color: colors.bgPrimary,
@@ -42,7 +68,7 @@ class PayrollScreen extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Unlocks once Department, HR, and Accounting have all '
-                'verified a period\'s AR & DTR.',
+            'verified a period\'s AR & DTR.',
             style: TextStyle(color: colors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 12),
@@ -52,47 +78,182 @@ class PayrollScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: _overviewStat(
-                      colors, 'Available', available, colors.info),
+                    colors,
+                    'Available',
+                    available,
+                    colors.info,
+                  ),
                 ),
                 Container(width: 1, height: 40, color: colors.border),
                 Expanded(
                   child: _overviewStat(
-                      colors, 'Received', received, colors.success),
+                    colors,
+                    'Received',
+                    received,
+                    colors.success,
+                  ),
                 ),
                 Container(width: 1, height: 40, color: colors.border),
                 Expanded(
                   child: _overviewStat(
-                      colors, 'Pending', pending, colors.textSecondary),
+                    colors,
+                    'Pending',
+                    pending,
+                    colors.textSecondary,
+                  ),
                 ),
               ],
             ),
           ),
-          for (final report in reports) _payrollTile(context, colors, report),
+          _searchField(
+            colors,
+            controller: _searchController,
+            hint: 'Search by period',
+            onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+            onClear: () => setState(() => _query = ''),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _filterChip(
+                  colors,
+                  label: 'All',
+                  selected: _filterStatus == null,
+                  onTap: () => setState(() => _filterStatus = null),
+                ),
+                const SizedBox(width: 8),
+                for (final status in PayrollStatus.values) ...[
+                  _filterChip(
+                    colors,
+                    label: status.label,
+                    selected: _filterStatus == status,
+                    onTap: () => setState(() => _filterStatus = status),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (reports.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No payroll records match your search or filter.',
+                  style: TextStyle(color: colors.textSecondary, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            for (final report in reports) _payrollTile(context, colors, report),
         ],
       ),
     );
   }
 
+  Widget _searchField(
+    AppColors colors, {
+    required TextEditingController controller,
+    required String hint,
+    required ValueChanged<String> onChanged,
+    required VoidCallback onClear,
+  }) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      style: TextStyle(color: colors.text, fontSize: 14),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: colors.textSecondary, fontSize: 13),
+        prefixIcon: Icon(Icons.search, color: colors.textSecondary, size: 20),
+        suffixIcon: controller.text.isEmpty
+            ? null
+            : IconButton(
+                icon: Icon(Icons.close, color: colors.textSecondary, size: 18),
+                onPressed: () {
+                  controller.clear();
+                  onClear();
+                },
+              ),
+        filled: true,
+        fillColor: colors.bgSecondary,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 10,
+          horizontal: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: colors.accent),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChip(
+    AppColors colors, {
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      backgroundColor: colors.bgSecondary,
+      selectedColor: colors.accent.withOpacity(0.15),
+      labelStyle: TextStyle(
+        color: selected ? colors.accent : colors.textSecondary,
+        fontSize: 12,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      ),
+      side: BorderSide(color: selected ? colors.accent : colors.border),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+    );
+  }
+
   Widget _overviewStat(
-      AppColors colors,
-      String label,
-      int value,
-      Color valueColor,
-      ) {
+    AppColors colors,
+    String label,
+    int value,
+    Color valueColor,
+  ) {
     return Column(
       children: [
         Text(
           '$value',
           style: TextStyle(
-              color: valueColor, fontSize: 20, fontWeight: FontWeight.w700),
+            color: valueColor,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 2),
-        Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12)),
+        Text(
+          label,
+          style: TextStyle(color: colors.textSecondary, fontSize: 12),
+        ),
       ],
     );
   }
 
-  Widget _payrollTile(BuildContext context, AppColors colors, ReportItem report) {
+  Widget _payrollTile(
+    BuildContext context,
+    AppColors colors,
+    ReportItem report,
+  ) {
     late final String subtitle;
     if (report.payrollStatus == PayrollStatus.received &&
         report.payrollReceivedAt != null) {
@@ -121,13 +282,14 @@ class PayrollScreen extends StatelessWidget {
                   Text(
                     report.periodLabel,
                     style: TextStyle(
-                        color: colors.text, fontWeight: FontWeight.w600),
+                      color: colors.text,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style:
-                    TextStyle(color: colors.textSecondary, fontSize: 12),
+                    style: TextStyle(color: colors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -144,8 +306,18 @@ class PayrollScreen extends StatelessWidget {
 
   String _formatDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }

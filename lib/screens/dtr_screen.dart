@@ -8,23 +8,50 @@ import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
 import '../widgets/status_badge.dart';
 
-class DtrScreen extends StatelessWidget {
+class DtrScreen extends StatefulWidget {
   const DtrScreen({super.key});
+
+  @override
+  State<DtrScreen> createState() => _DtrScreenState();
+}
+
+class _DtrScreenState extends State<DtrScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  DtrDayStatus? _filterStatus; // null = All
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
     final data = MockDataService();
-    final entries = data.getDtrEntries();
+    final allEntries = data.getDtrEntries();
     final overallStage = data.getDtrOverallStage();
 
-    final present =
-        entries.where((e) => e.status == DtrDayStatus.present).length;
-    final late = entries.where((e) => e.status == DtrDayStatus.late).length;
-    final absent =
-        entries.where((e) => e.status == DtrDayStatus.absent).length;
-    final missing =
-        entries.where((e) => e.status == DtrDayStatus.missing).length;
+    // Attendance summary always reflects the full period, regardless
+    // of what the search/filter is currently narrowing the table to.
+    final present = allEntries
+        .where((e) => e.status == DtrDayStatus.present)
+        .length;
+    final late = allEntries.where((e) => e.status == DtrDayStatus.late).length;
+    final absent = allEntries
+        .where((e) => e.status == DtrDayStatus.absent)
+        .length;
+    final missing = allEntries
+        .where((e) => e.status == DtrDayStatus.missing)
+        .length;
+
+    final entries = allEntries.where((e) {
+      final matchesQuery =
+          _query.isEmpty || _shortDate(e.date).toLowerCase().contains(_query);
+      final matchesFilter = _filterStatus == null || e.status == _filterStatus;
+      return matchesQuery && matchesFilter;
+    }).toList();
 
     return Container(
       color: colors.bgPrimary,
@@ -40,20 +67,64 @@ class DtrScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SectionCard(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Table(
-              columnWidths: const {
-                0: FlexColumnWidth(1.3),
-                1: FlexColumnWidth(1),
-                2: FlexColumnWidth(1),
-                3: FlexColumnWidth(1),
-              },
+          _searchField(
+            colors,
+            controller: _searchController,
+            hint: 'Search by date (e.g. Aug 17)',
+            onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+            onClear: () => setState(() => _query = ''),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
               children: [
-                _headerRow(colors),
-                for (final e in entries) _dataRow(colors, e),
+                _filterChip(
+                  colors,
+                  label: 'All',
+                  selected: _filterStatus == null,
+                  onTap: () => setState(() => _filterStatus = null),
+                ),
+                const SizedBox(width: 8),
+                for (final status in DtrDayStatus.values) ...[
+                  _filterChip(
+                    colors,
+                    label: _statusLabel(status),
+                    selected: _filterStatus == status,
+                    onTap: () => setState(() => _filterStatus = status),
+                  ),
+                  const SizedBox(width: 8),
+                ],
               ],
             ),
+          ),
+          const SizedBox(height: 12),
+          SectionCard(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: entries.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'No DTR entries match your search or filter.',
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  )
+                : Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(1.3),
+                      1: FlexColumnWidth(1),
+                      2: FlexColumnWidth(1),
+                      3: FlexColumnWidth(1),
+                    },
+                    children: [
+                      _headerRow(colors),
+                      for (final e in entries) _dataRow(colors, e),
+                    ],
+                  ),
           ),
           SectionCard(
             title: 'Attendance Summary',
@@ -68,18 +139,19 @@ class DtrScreen extends StatelessWidget {
           ),
           SectionCard(
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Text(
-                    'DTR Status',
-                    style: TextStyle(color: colors.text, fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+                Text(
+                  'DTR Status',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 8),
-                StatusBadge(label: overallStage.label, kind: overallStage.colorKind),
+                StatusBadge(
+                  label: overallStage.label,
+                  kind: overallStage.colorKind,
+                ),
               ],
             ),
           ),
@@ -93,25 +165,114 @@ class DtrScreen extends StatelessWidget {
     );
   }
 
+  Widget _searchField(
+    AppColors colors, {
+    required TextEditingController controller,
+    required String hint,
+    required ValueChanged<String> onChanged,
+    required VoidCallback onClear,
+  }) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      style: TextStyle(color: colors.text, fontSize: 14),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: colors.textSecondary, fontSize: 13),
+        prefixIcon: Icon(Icons.search, color: colors.textSecondary, size: 20),
+        suffixIcon: controller.text.isEmpty
+            ? null
+            : IconButton(
+                icon: Icon(Icons.close, color: colors.textSecondary, size: 18),
+                onPressed: () {
+                  controller.clear();
+                  onClear();
+                },
+              ),
+        filled: true,
+        fillColor: colors.bgSecondary,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 10,
+          horizontal: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: colors.accent),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChip(
+    AppColors colors, {
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      backgroundColor: colors.bgSecondary,
+      selectedColor: colors.accent.withOpacity(0.15),
+      labelStyle: TextStyle(
+        color: selected ? colors.accent : colors.textSecondary,
+        fontSize: 12,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      ),
+      side: BorderSide(color: selected ? colors.accent : colors.border),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+    );
+  }
+
+  String _statusLabel(DtrDayStatus status) {
+    switch (status) {
+      case DtrDayStatus.present:
+        return 'Present';
+      case DtrDayStatus.late:
+        return 'Late';
+      case DtrDayStatus.missing:
+        return 'Missing';
+      case DtrDayStatus.absent:
+        return 'Absent';
+    }
+  }
+
   TableRow _headerRow(AppColors colors) {
     final style = TextStyle(
       color: colors.textSecondary,
       fontSize: 12,
       fontWeight: FontWeight.w600,
     );
-    return TableRow(children: [
-      Padding(
-          padding: const EdgeInsets.all(10), child: Text('Date', style: style)),
-      Padding(
+    return TableRow(
+      children: [
+        Padding(
           padding: const EdgeInsets.all(10),
-          child: Text('Time In', style: style)),
-      Padding(
+          child: Text('Date', style: style),
+        ),
+        Padding(
           padding: const EdgeInsets.all(10),
-          child: Text('Time Out', style: style)),
-      Padding(
+          child: Text('Time In', style: style),
+        ),
+        Padding(
           padding: const EdgeInsets.all(10),
-          child: Text('Status', style: style)),
-    ]);
+          child: Text('Time Out', style: style),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: Text('Status', style: style),
+        ),
+      ],
+    );
   }
 
   TableRow _dataRow(AppColors colors, DtrEntry e) {
@@ -133,22 +294,29 @@ class DtrScreen extends StatelessWidget {
         color = colors.error;
         break;
     }
-    return TableRow(children: [
-      Padding(
+    return TableRow(
+      children: [
+        Padding(
           padding: const EdgeInsets.all(10),
-          child: Text(_shortDate(e.date), style: style)),
-      Padding(
+          child: Text(_shortDate(e.date), style: style),
+        ),
+        Padding(
           padding: const EdgeInsets.all(10),
-          child: Text(e.timeIn ?? '—', style: style)),
-      Padding(
+          child: Text(e.timeIn ?? '—', style: style),
+        ),
+        Padding(
           padding: const EdgeInsets.all(10),
-          child: Text(e.timeOut ?? '—', style: style)),
-      Padding(
-        padding: const EdgeInsets.all(10),
-        child: Text(icon,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-      ),
-    ]);
+          child: Text(e.timeOut ?? '—', style: style),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: Text(
+            icon,
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _summaryRow(AppColors colors, String label, int value) {
@@ -158,9 +326,10 @@ class DtrScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(color: colors.text, fontSize: 13)),
-          Text('$value',
-              style:
-                  TextStyle(color: colors.text, fontWeight: FontWeight.w600)),
+          Text(
+            '$value',
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
@@ -168,8 +337,18 @@ class DtrScreen extends StatelessWidget {
 
   String _shortDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month - 1]} ${d.day}';
   }
