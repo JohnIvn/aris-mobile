@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/status.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
-
-/// Small colored pill used everywhere a pipeline stage or
-/// notification kind needs a visual status indicator.
 class StatusBadge extends StatelessWidget {
   final String label;
   final StatusColorKind kind;
@@ -32,11 +29,10 @@ class StatusBadge extends StatelessWidget {
     final colors = ThemeScope.colorsOf(context);
     final color = _colorFor(colors, kind);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,

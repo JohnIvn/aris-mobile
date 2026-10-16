@@ -18,79 +18,140 @@ class NotificationsScreen extends StatelessWidget {
     final notifications = MockDataService().getNotifications();
 
     return Container(
-      color: colors.bgPrimary,
+      color: colors.canvas,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
         children: [
           Text(
             'Notifications',
             style: TextStyle(
-                color: colors.text, fontSize: 20, fontWeight: FontWeight.w700),
+              color: colors.text,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+            ),
           ),
-          const SizedBox(height: 12),
-          for (final n in notifications) _notificationTile(colors, n),
+          const SizedBox(height: 16),
+          if (notifications.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No notifications yet.',
+                  style: TextStyle(color: colors.textSecondary, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            for (final n in notifications) _notificationTile(colors, n),
         ],
       ),
     );
   }
 
-  Widget _notificationTile(AppColors colors, NotificationItem n) {
-    Color dotColor;
-    switch (n.kind) {
+  Color _kindColor(AppColors colors, StatusColorKind kind) {
+    switch (kind) {
       case StatusColorKind.success:
-        dotColor = colors.success;
-        break;
+        return colors.success;
       case StatusColorKind.warning:
-        dotColor = colors.warning;
-        break;
+        return colors.warning;
       case StatusColorKind.error:
-        dotColor = colors.error;
-        break;
+        return colors.error;
       case StatusColorKind.info:
-        dotColor = colors.info;
-        break;
+        return colors.info;
       case StatusColorKind.neutral:
-        dotColor = colors.textSecondary;
-        break;
+        return colors.textSecondary;
     }
+  }
 
-    return InkWell(
-      onTap: n.deepLinkReportId != null
-          ? () => onOpenReport(n.deepLinkReportId!)
-          : null,
-      borderRadius: BorderRadius.circular(14),
-      child: SectionCard(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(top: 5, right: 10),
-              decoration:
-                  BoxDecoration(color: dotColor, shape: BoxShape.circle),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(n.title,
-                      style: TextStyle(
+  IconData _kindIcon(StatusColorKind kind) {
+    switch (kind) {
+      case StatusColorKind.success:
+        return Icons.check_circle_outline;
+      case StatusColorKind.warning:
+        return Icons.hourglass_empty;
+      case StatusColorKind.error:
+        return Icons.error_outline;
+      case StatusColorKind.info:
+        return Icons.info_outline;
+      case StatusColorKind.neutral:
+        return Icons.notifications_none_rounded;
+    }
+  }
+
+  Widget _notificationTile(AppColors colors, NotificationItem n) {
+    final accent = _kindColor(colors, n.kind);
+    final tappable = n.deepLinkReportId != null;
+
+    return SectionCard(
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          // No handler (and so no ripple) when there is no report to open.
+          onTap: tappable ? () => onOpenReport(n.deepLinkReportId!) : null,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(_kindIcon(n.kind), color: accent, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        n.title,
+                        style: TextStyle(
                           color: colors.text,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
-                  const SizedBox(height: 3),
-                  Text(n.body,
-                      style:
-                          TextStyle(color: colors.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Text(_relative(n.timestamp),
-                      style:
-                          TextStyle(color: colors.textSecondary, fontSize: 11)),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        n.body,
+                        style: TextStyle(
+                          color: colors.textSecondary,
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _relative(n.timestamp),
+                        style: TextStyle(
+                          color: colors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (tappable) ...[
+                  const SizedBox(width: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Icon(
+                      Icons.chevron_right,
+                      color: colors.textSecondary,
+                      size: 20,
+                    ),
+                  ),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

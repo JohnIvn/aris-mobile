@@ -1,7 +1,7 @@
-import 'package:aris_mobile/models/status.dart';
 import 'package:flutter/material.dart';
 
 import '../models/dtr_entry.dart';
+import '../models/status.dart';
 import '../services/mock_data_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
@@ -20,6 +20,16 @@ class _DtrScreenState extends State<DtrScreen> {
   String _query = '';
   DtrDayStatus? _filterStatus; // null = All
 
+  /// Happy-path order of the pipeline. `rejected` is not a step.
+  static const _steps = [
+    PipelineStage.draft,
+    PipelineStage.submitted,
+    PipelineStage.department,
+    PipelineStage.hr,
+    PipelineStage.accounting,
+    PipelineStage.completed,
+  ];
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -34,7 +44,7 @@ class _DtrScreenState extends State<DtrScreen> {
     final overallStage = data.getDtrOverallStage();
 
     // Attendance summary always reflects the full period, regardless
-    // of what the search/filter is currently narrowing the table to.
+    // of what the search/filter is currently narrowing the list to.
     final present = allEntries
         .where((e) => e.status == DtrDayStatus.present)
         .length;
@@ -54,19 +64,34 @@ class _DtrScreenState extends State<DtrScreen> {
     }).toList();
 
     return Container(
-      color: colors.bgPrimary,
+      color: colors.canvas,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
         children: [
           Text(
-            'DTR — ${MockDataService.currentPayrollPeriod}',
+            'DTR',
             style: TextStyle(
               color: colors.text,
-              fontSize: 18,
+              fontSize: 22,
               fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 2),
+          Text(
+            MockDataService.currentPayrollPeriod,
+            style: TextStyle(color: colors.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          _statusCard(colors, overallStage),
+          _summaryCard(
+            colors,
+            total: allEntries.length,
+            present: present,
+            late: late,
+            absent: absent,
+            missing: missing,
+          ),
           _searchField(
             colors,
             controller: _searchController,
@@ -74,9 +99,9 @@ class _DtrScreenState extends State<DtrScreen> {
             onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
             onClear: () => setState(() => _query = ''),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           SizedBox(
-            height: 36,
+            height: 38,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
@@ -99,71 +124,280 @@ class _DtrScreenState extends State<DtrScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           SectionCard(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            title: 'Daily Records',
             child: entries.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'No DTR entries match your search or filter.',
-                      style: TextStyle(
-                        color: colors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
+                ? Text(
+                    'No DTR entries match your search or filter.',
+                    style: TextStyle(color: colors.textSecondary, fontSize: 13),
                   )
-                : Table(
-                    columnWidths: const {
-                      0: FlexColumnWidth(1.3),
-                      1: FlexColumnWidth(1),
-                      2: FlexColumnWidth(1),
-                      3: FlexColumnWidth(1),
-                    },
+                : Column(
                     children: [
-                      _headerRow(colors),
-                      for (final e in entries) _dataRow(colors, e),
+                      for (var i = 0; i < entries.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 8),
+                        _entryRow(colors, entries[i]),
+                      ],
                     ],
                   ),
-          ),
-          SectionCard(
-            title: 'Attendance Summary',
-            child: Column(
-              children: [
-                _summaryRow(colors, 'Present', present),
-                _summaryRow(colors, 'Late', late),
-                _summaryRow(colors, 'Absent', absent),
-                _summaryRow(colors, 'Missing punches', missing),
-              ],
-            ),
-          ),
-          SectionCard(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'DTR Status',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                StatusBadge(
-                  label: overallStage.label,
-                  kind: overallStage.colorKind,
-                ),
-              ],
-            ),
           ),
           Text(
             'Records are sourced from biometrics and cannot be edited '
             'directly. Tap an entry to report a discrepancy.',
-            style: TextStyle(color: colors.textSecondary, fontSize: 12),
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
           ),
         ],
       ),
     );
   }
+
+  // ---- Cards ------------------------------------------------------------
+
+  Widget _statusCard(AppColors colors, PipelineStage stage) {
+    final current = _steps.indexOf(stage);
+    final fill = _kindColor(colors, stage.colorKind);
+
+    return SectionCard(
+      title: 'DTR Status',
+      action: StatusBadge(label: stage.label, kind: stage.colorKind),
+      child: current >= 0
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    for (var i = 0; i < _steps.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 4),
+                      Expanded(
+                        child: Container(
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: i <= current
+                                ? fill
+                                : colors.border.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Step ${current + 1} of ${_steps.length}',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            )
+          : Text(
+              'Resubmit your corrected AR & DTR.',
+              style: TextStyle(color: colors.textSecondary, fontSize: 13.5),
+            ),
+    );
+  }
+
+  Widget _summaryCard(
+    AppColors colors, {
+    required int total,
+    required int present,
+    required int late,
+    required int absent,
+    required int missing,
+  }) {
+    final segments = <(int, Color)>[
+      (present, colors.success),
+      (late, colors.warning),
+      (missing, colors.warning),
+      (absent, colors.error),
+    ].where((s) => s.$1 > 0).toList();
+
+    return SectionCard(
+      title: 'Attendance Summary',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _summaryStat(
+                  colors,
+                  'Present',
+                  present,
+                  colors.success,
+                ),
+              ),
+              Expanded(
+                child: _summaryStat(colors, 'Late', late, colors.warning),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _summaryStat(colors, 'Absent', absent, colors.error),
+              ),
+              Expanded(
+                child: _summaryStat(
+                  colors,
+                  'Missing punches',
+                  missing,
+                  colors.warning,
+                ),
+              ),
+            ],
+          ),
+          if (total > 0) ...[
+            const SizedBox(height: 18),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                height: 8,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < segments.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 2),
+                      Expanded(
+                        flex: segments[i].$1,
+                        child: Container(color: segments[i].$2),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryStat(AppColors colors, String label, int value, Color dot) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$value',
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---- Daily record rows -----------------------------------------------
+
+  Widget _entryRow(AppColors colors, DtrEntry e) {
+    final kind = _kindFor(e.status);
+    final accent = _kindColor(colors, kind);
+    final isPresent = e.status == DtrDayStatus.present;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isPresent ? null : accent.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isPresent
+              ? colors.border.withValues(alpha: 0.5)
+              : accent.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: colors.canvas,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  _month(e.date).toUpperCase(),
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                Text(
+                  '${e.date.day}',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: _timeColumn(colors, 'Time in', e.timeIn)),
+          Expanded(child: _timeColumn(colors, 'Time out', e.timeOut)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: StatusBadge(label: _statusLabel(e.status), kind: kind),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _timeColumn(AppColors colors, String label, String? value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: colors.textSecondary, fontSize: 11.5),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value ?? '—',
+          style: TextStyle(
+            color: value == null ? colors.textSecondary : colors.text,
+            fontSize: 14,
+            fontWeight: value == null ? FontWeight.w400 : FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---- Search + filters -------------------------------------------------
 
   Widget _searchField(
     AppColors colors, {
@@ -172,13 +406,19 @@ class _DtrScreenState extends State<DtrScreen> {
     required ValueChanged<String> onChanged,
     required VoidCallback onClear,
   }) {
+    OutlineInputBorder border(Color color) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: color),
+    );
+    final hairline = colors.border.withValues(alpha: 0.6);
+
     return TextField(
       controller: controller,
       onChanged: onChanged,
       style: TextStyle(color: colors.text, fontSize: 14),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: colors.textSecondary, fontSize: 13),
+        hintStyle: TextStyle(color: colors.textSecondary, fontSize: 13.5),
         prefixIcon: Icon(Icons.search, color: colors.textSecondary, size: 20),
         suffixIcon: controller.text.isEmpty
             ? null
@@ -190,24 +430,15 @@ class _DtrScreenState extends State<DtrScreen> {
                 },
               ),
         filled: true,
-        fillColor: colors.bgSecondary,
+        fillColor: colors.surface,
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
-          vertical: 10,
-          horizontal: 12,
+          vertical: 13,
+          horizontal: 14,
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.accent),
-        ),
+        border: border(hairline),
+        enabledBorder: border(hairline),
+        focusedBorder: border(colors.accentActive),
       ),
     );
   }
@@ -218,21 +449,45 @@ class _DtrScreenState extends State<DtrScreen> {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    return ChoiceChip(
-      label: Text(label),
+    return Semantics(
+      button: true,
       selected: selected,
-      onSelected: (_) => onTap(),
-      backgroundColor: colors.bgSecondary,
-      selectedColor: colors.accent.withOpacity(0.15),
-      labelStyle: TextStyle(
-        color: selected ? colors.accent : colors.textSecondary,
-        fontSize: 12,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: selected
+                  ? colors.accent.withValues(alpha: 0.14)
+                  : colors.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: selected
+                    ? colors.accentActive.withValues(alpha: 0.5)
+                    : colors.border.withValues(alpha: 0.6),
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected ? colors.accentActive : colors.textSecondary,
+                fontSize: 12.5,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
       ),
-      side: BorderSide(color: selected ? colors.accent : colors.border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
     );
   }
+
+  // ---- Helpers ----------------------------------------------------------
 
   String _statusLabel(DtrDayStatus status) {
     switch (status) {
@@ -247,109 +502,41 @@ class _DtrScreenState extends State<DtrScreen> {
     }
   }
 
-  TableRow _headerRow(AppColors colors) {
-    final style = TextStyle(
-      color: colors.textSecondary,
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-    );
-    return TableRow(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text('Date', style: style),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text('Time In', style: style),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text('Time Out', style: style),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text('Status', style: style),
-        ),
-      ],
-    );
-  }
-
-  TableRow _dataRow(AppColors colors, DtrEntry e) {
-    final style = TextStyle(color: colors.text, fontSize: 13);
-    late final String icon;
-    late final Color color;
-    switch (e.status) {
+  /// Same colors the old table icons used: present = success,
+  /// late/missing = warning, absent = error.
+  StatusColorKind _kindFor(DtrDayStatus status) {
+    switch (status) {
       case DtrDayStatus.present:
-        icon = '✓';
-        color = colors.success;
-        break;
+        return StatusColorKind.success;
       case DtrDayStatus.late:
       case DtrDayStatus.missing:
-        icon = '⚠';
-        color = colors.warning;
-        break;
+        return StatusColorKind.warning;
       case DtrDayStatus.absent:
-        icon = '✕';
-        color = colors.error;
-        break;
+        return StatusColorKind.error;
     }
-    return TableRow(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text(_shortDate(e.date), style: style),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text(e.timeIn ?? '—', style: style),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text(e.timeOut ?? '—', style: style),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text(
-            icon,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ],
-    );
   }
 
-  Widget _summaryRow(AppColors colors, String label, int value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: colors.text, fontSize: 13)),
-          Text(
-            '$value',
-            style: TextStyle(color: colors.text, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
+  Color _kindColor(AppColors c, StatusColorKind kind) {
+    switch (kind) {
+      case StatusColorKind.success:
+        return c.success;
+      case StatusColorKind.warning:
+        return c.warning;
+      case StatusColorKind.error:
+        return c.error;
+      case StatusColorKind.info:
+        return c.info;
+      case StatusColorKind.neutral:
+        return c.textSecondary;
+    }
   }
 
-  String _shortDate(DateTime d) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[d.month - 1]} ${d.day}';
-  }
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _month(DateTime d) => _months[d.month - 1];
+
+  String _shortDate(DateTime d) => '${_month(d)} ${d.day}';
 }

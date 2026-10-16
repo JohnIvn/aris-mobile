@@ -32,9 +32,6 @@ extension PaletteModeLabel on PaletteMode {
   }
 }
 
-/// Immutable bundle of all colors ARIS uses. Swap the active
-/// instance to re-theme the whole app; screens/widgets should
-/// only ever read AppColors fields, never a raw hex value.
 @immutable
 class AppColors {
   final PaletteMode mode;
@@ -42,6 +39,13 @@ class AppColors {
   final Color bgPrimary;
   final Color bgSecondary;
   final Color bgTertiary;
+
+  /// Page background that cards sit on (the website dashboard's
+  /// off-white). Used together with [surface].
+  final Color canvas;
+
+  /// Card / sheet fill that sits on top of [canvas].
+  final Color surface;
 
   final Color text;
   final Color textSecondary;
@@ -62,6 +66,8 @@ class AppColors {
     required this.bgPrimary,
     required this.bgSecondary,
     required this.bgTertiary,
+    required this.canvas,
+    required this.surface,
     required this.text,
     required this.textSecondary,
     required this.accent,
@@ -80,6 +86,8 @@ class AppColors {
     bgPrimary: Color(0xFFFFFFFF),
     bgSecondary: Color(0xFFF5F5F5),
     bgTertiary: Color(0xFFEDEDED),
+    canvas: Color(0xFFF3F5F3),
+    surface: Color(0xFFFFFFFF),
     text: Color(0xFF000000),
     textSecondary: Color(0xFF666666),
     accent: Color(0xFF4FAE4A),
@@ -92,13 +100,14 @@ class AppColors {
     info: Color(0xFF3B82C4),
   );
 
-  /// Dark mode: keeps the same accent hue but lifts it slightly so
-  /// it still reads clearly on near-black backgrounds.
+  /// Dark mode
   static const AppColors dark = AppColors(
     mode: PaletteMode.dark,
     bgPrimary: Color(0xFF121212),
     bgSecondary: Color(0xFF1C1C1C),
     bgTertiary: Color(0xFF262626),
+    canvas: Color(0xFF121212),
+    surface: Color(0xFF1C1C1C),
     text: Color(0xFFF2F2F2),
     textSecondary: Color(0xFFA6A6A6),
     accent: Color(0xFF5FC15A),
@@ -128,6 +137,8 @@ class AppColors {
       bgPrimary: inv(base.bgPrimary),
       bgSecondary: inv(base.bgSecondary),
       bgTertiary: inv(base.bgTertiary),
+      canvas: inv(base.canvas),
+      surface: inv(base.surface),
       text: inv(base.text),
       textSecondary: inv(base.textSecondary),
       accent: inv(base.accent),
@@ -141,15 +152,14 @@ class AppColors {
     );
   }
 
-  /// Deuteranopia/protanopia-safe status colors (Okabe-Ito
-  /// palette), since green/red/orange are what collide for most
-  /// color-blind users. Accent switches from green to blue too,
-  /// since it doubles as a status/affordance color in a few places.
+
   static const AppColors colorBlind = AppColors(
     mode: PaletteMode.colorBlind,
     bgPrimary: Color(0xFFFFFFFF),
     bgSecondary: Color(0xFFF5F5F5),
     bgTertiary: Color(0xFFEDEDED),
+    canvas: Color(0xFFF4F4F4),
+    surface: Color(0xFFFFFFFF),
     text: Color(0xFF000000),
     textSecondary: Color(0xFF666666),
     accent: Color(0xFF0072B2),
