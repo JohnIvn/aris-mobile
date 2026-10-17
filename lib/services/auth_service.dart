@@ -127,6 +127,12 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (_baseUrl.isEmpty || _webClientId.isEmpty) {
+        throw AuthException(
+          'Missing SERVER_URL / WEB_GOOGLE_CLIENT_ID in .env',
+        );
+      }
+
       final idToken = await _getIdToken();
       _pendingIdToken = idToken;
 
@@ -144,9 +150,12 @@ class AuthService extends ChangeNotifier {
       } else if (!e.cancelled) {
         _error = e.message;
       }
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('signIn error: $e\n$st');
       _status = AuthStatus.unauthenticated;
-      _error = 'Sign-in failed. Please try again.';
+      _error = kDebugMode
+          ? 'Sign-in failed: $e'
+          : 'Sign-in failed. Please try again.';
     }
     notifyListeners();
   }
@@ -188,9 +197,12 @@ class AuthService extends ChangeNotifier {
     } on AuthException catch (e) {
       _status = AuthStatus.unauthenticated;
       if (!e.cancelled) _error = e.message;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('signUp error: $e\n$st');
       _status = AuthStatus.unauthenticated;
-      _error = 'Sign-up failed. Please try again.';
+      _error = kDebugMode
+          ? 'Sign-up failed: $e'
+          : 'Sign-up failed. Please try again.';
     }
     notifyListeners();
   }
@@ -219,8 +231,8 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<String> _getIdToken() async {
-    await _ensureGoogleInit();
     try {
+      await _ensureGoogleInit();
       final account = await GoogleSignIn.instance.authenticate();
       final idToken = account.authentication.idToken;
       if (idToken == null) {
@@ -250,20 +262,48 @@ class AuthService extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 20));
 
-      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      if (kDebugMode) {
+        debugPrint('POST $path -> ${res.statusCode}\n${res.body}');
+      }
 
-      if (res.statusCode < 200 || res.statusCode >= 300) {
+      final decoded = jsonDecode(res.body);
+      if (decoded is! Map) {
         throw AuthException(
-          (json['message'] ?? 'Request failed').toString(),
+          'Invalid server response',
           statusCode: res.statusCode,
         );
       }
+      final json = Map<String, dynamic>.from(decoded);
 
-      return Map<String, dynamic>.from((json['data'] ?? json) as Map);
+      // Handlers may put the real status in the body while HTTP stays 200
+      final bodyStatus = json['statusCode'] is int
+          ? json['statusCode'] as int
+          : null;
+      final status = bodyStatus ?? res.statusCode;
+
+      // Payload may be wrapped in `data` or returned at the top level.
+      final Object? payload = json['data'] is Map
+          ? json['data']
+          : (json.containsKey('token') && json.containsKey('user')
+                ? json
+                : null);
+
+      if (status < 200 || status >= 300 || payload == null) {
+        throw AuthException(
+          (json['message'] ?? json['error'] ?? 'Request failed').toString(),
+          statusCode: status,
+        );
+      }
+
+      return Map<String, dynamic>.from(payload as Map);
     } on SocketException {
       throw AuthException('No internet connection');
     } on TimeoutException {
       throw AuthException('Request timed out');
+    } on http.ClientException catch (e) {
+      throw AuthException('Network error: ${e.message}');
+    } on FormatException {
+      throw AuthException('Invalid server response');
     }
   }
 
