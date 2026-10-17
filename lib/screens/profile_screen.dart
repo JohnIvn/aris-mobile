@@ -12,14 +12,39 @@ import 'settings_screen.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
+  static String _s(Object? v) {
+    final s = v?.toString().trim() ?? '';
+    return s.isEmpty ? '—' : s;
+  }
+
+  static String _date(Object? v) {
+    final s = _s(v);
+    return s.contains('T') ? s.split('T').first : s;
+  }
+
+  static String _cap(String s) =>
+      s.isEmpty ? '—' : s[0].toUpperCase() + s.substring(1);
+
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
     final auth = AuthScope.of(context);
+    final user = auth.user;
+    final raw = user?.raw ?? const <String, dynamic>{};
 
-    final name = auth.user?.name ?? MockDataService.currentUserName;
-    final email = auth.user?.email;
+    final name = user?.name ?? MockDataService.currentUserName;
+    final email = user?.email;
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
+    final avatarUrl = user?.avatarUrl;
+
+    final initialAvatar = Text(
+      initial,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+      ),
+    );
 
     return Container(
       color: colors.canvas,
@@ -47,14 +72,17 @@ class ProfileScreen extends StatelessWidget {
                     color: colors.accentActive,
                     shape: BoxShape.circle,
                   ),
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  child: avatarUrl != null && avatarUrl.isNotEmpty
+                      ? ClipOval(
+                          child: Image.network(
+                            avatarUrl,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => initialAvatar,
+                          ),
+                        )
+                      : initialAvatar,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -91,15 +119,27 @@ class ProfileScreen extends StatelessWidget {
           ),
           SectionCard(
             title: 'Personal Information',
-            child: _infoRows(colors, [
-              ('Name', name),
-              ('Employee/Professor ID', '—'),
-              ('Department', '—'),
-              ('Position', '—'),
-              ('Email', email ?? '—'),
-            ]),
+            child: _infoRows(
+              colors,
+              [
+                ('Name', name),
+                ('Middle name', _s(raw['middlename'])),
+                ('Username', _s(user?.username)),
+                ('Role', _cap(user?.role ?? '')),
+                ('Employee/Professor ID', _s(user?.employeeId)),
+                ('Department', _s(user?.department)),
+                ('Position', _s(user?.position)),
+                ('Birthday', _date(raw['birthday'])),
+                ('Age', _s(raw['age'])),
+                (
+                  'Gender',
+                  _cap(_s(raw['gender']) == '—' ? '' : _s(raw['gender'])),
+                ),
+                ('Email', email ?? '—'),
+              ],
+              wrappable: const {'Department'},
+            ),
           ),
-
           SectionCard(
             title: 'Employment Information',
             child: _infoRows(colors, [
@@ -115,9 +155,9 @@ class ProfileScreen extends StatelessWidget {
               icon: Icons.palette_outlined,
               title: 'Appearance & Notifications',
               subtitle: 'Theme, color mode, notification types',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
             ),
           ),
           SectionCard(
@@ -127,9 +167,9 @@ class ProfileScreen extends StatelessWidget {
               icon: Icons.verified_user_outlined,
               title: 'OAuth account',
               subtitle: email,
-              trailing: auth.user != null
+              trailing: user != null
                   ? StatusBadge(
-                      label: auth.user!.provider,
+                      label: user.provider,
                       kind: StatusColorKind.neutral,
                     )
                   : null,
@@ -161,8 +201,13 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-
-  Widget _infoRows(AppColors colors, List<(String, String)> rows) {
+  /// Labels keep their natural width; values fill the rest on one line.
+  /// Only labels listed in [wrappable] may wrap (up to 3 lines).
+  Widget _infoRows(
+    AppColors colors,
+    List<(String, String)> rows, {
+    Set<String> wrappable = const {},
+  }) {
     final children = <Widget>[];
     for (var i = 0; i < rows.length; i++) {
       if (i > 0) {
@@ -176,24 +221,24 @@ class ProfileScreen extends StatelessWidget {
       }
       final (label, value) = rows[i];
       final empty = value == '—';
+      final canWrap = wrappable.contains(label);
       children.add(
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 5,
-              child: Text(
-                label,
-                style: TextStyle(color: colors.textSecondary, fontSize: 13.5),
-              ),
+            Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(color: colors.textSecondary, fontSize: 13.5),
             ),
             const SizedBox(width: 12),
             Expanded(
-              flex: 4,
               child: Text(
                 value,
                 textAlign: TextAlign.right,
-                maxLines: 2,
+                maxLines: canWrap ? 3 : 1,
+                softWrap: canWrap,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: empty ? colors.textSecondary : colors.text,
