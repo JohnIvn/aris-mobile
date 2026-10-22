@@ -2,29 +2,35 @@ import 'package:flutter/material.dart';
 
 import '../models/report_item.dart';
 import '../models/status.dart';
+import '../services/ar_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
 import '../widgets/status_badge.dart';
+import 'ar_list_screen.dart';
 
-class ReportDetailScreen extends StatelessWidget {
+class ReportDetailScreen extends StatefulWidget {
   final ReportItem report;
 
   const ReportDetailScreen({super.key, required this.report});
 
-  /// Happy-path order of the pipeline. `rejected` is not a step.
-  static const _steps = [
-    PipelineStage.draft,
-    PipelineStage.submitted,
-    PipelineStage.department,
-    PipelineStage.hr,
-    PipelineStage.accounting,
-    PipelineStage.completed,
-  ];
+  @override
+  State<ReportDetailScreen> createState() => _ReportDetailScreenState();
+}
+
+class _ReportDetailScreenState extends State<ReportDetailScreen> {
+  ReportItem get report => widget.report;
+
+  Future<void> _openArs() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => ArListScreen(report: report)));
+    if (mounted) setState(() {}); // AR states may have changed
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
+    final s = ArService().summarize(report);
 
     return Scaffold(
       backgroundColor: colors.canvas,
@@ -43,10 +49,9 @@ class ReportDetailScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          _progressCard(colors),
-          if (report.stage == PipelineStage.rejected &&
-              report.rejectionRemarks != null)
-            _remarksCard(colors, report.rejectionRemarks!),
+          _progressCard(colors, s),
+          if (s.forResubmission + s.invalid + s.forwarded > 0)
+            _attentionCard(colors, s),
           SectionCard(
             title: 'Tally',
             child: Row(
@@ -54,7 +59,7 @@ class ReportDetailScreen extends StatelessWidget {
                 Expanded(
                   child: _tallyStat(
                     colors,
-                    label: 'DTR Time',
+                    label: 'DTR Time (Biometrics)',
                     value: '${report.dtrTotalHours.toStringAsFixed(1)} hrs',
                   ),
                 ),
@@ -64,13 +69,7 @@ class ReportDetailScreen extends StatelessWidget {
                   color: colors.border.withValues(alpha: 0.6),
                 ),
                 const SizedBox(width: 20),
-                Expanded(
-                  child: _tallyStat(
-                    colors,
-                    label: 'ARs Logged',
-                    value: '${report.arTaskTally}',
-                  ),
-                ),
+                Expanded(child: _arsButton(colors, s.total)),
               ],
             ),
           ),
@@ -133,7 +132,11 @@ class ReportDetailScreen extends StatelessWidget {
               _detailRow(colors, 'Professor ID', report.professorId),
               _detailRow(colors, 'Department', report.department),
               _detailRow(colors, 'Position', report.position),
-              _detailRow(colors, 'Date of Shift', _formatDate(report.shiftDate)),
+              _detailRow(
+                colors,
+                'Date of Shift',
+                _formatDate(report.shiftDate),
+              ),
             ]),
           ),
           SectionCard(
@@ -148,66 +151,56 @@ class ReportDetailScreen extends StatelessWidget {
     );
   }
 
-  Color _kindColor(AppColors c, StatusColorKind kind) {
-    switch (kind) {
-      case StatusColorKind.success:
-        return c.success;
-      case StatusColorKind.warning:
-        return c.warning;
-      case StatusColorKind.error:
-        return c.error;
-      case StatusColorKind.info:
-        return c.info;
-      case StatusColorKind.neutral:
-        return c.textSecondary;
-    }
-  }
-
-  /// Stage badge, a segmented bar of the pipeline (not shown for
-  /// rejected reports, which have no position in it), and the date.
-  Widget _progressCard(AppColors colors) {
-    final current = _steps.indexOf(report.stage);
-    final fill = _kindColor(colors, report.stage.colorKind);
-
+  /// AR verification percentage across the ARs still in the batch, with a
+  /// breakdown of every AR by state.
+  Widget _progressCard(AppColors colors, ArSummary s) {
     return SectionCard(
       title: 'Progress',
       action: StatusBadge(
-        label: report.stage.label,
-        kind: report.stage.colorKind,
+        label: '${s.percent}% verified',
+        kind: s.percent == 100 ? StatusColorKind.success : StatusColorKind.info,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (current >= 0) ...[
-            Row(
-              children: [
-                for (var i = 0; i < _steps.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 4),
-                  Expanded(
-                    child: Container(
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: i <= current
-                            ? fill
-                            : colors.border.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Step ${current + 1} of ${_steps.length}',
-              style: TextStyle(
-                color: colors.text,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: s.percent / 100,
+              minHeight: 8,
+              backgroundColor: colors.border.withValues(alpha: 0.5),
+              valueColor: AlwaysStoppedAnimation(
+                s.percent == 100 ? colors.success : colors.accentActive,
               ),
             ),
-            const SizedBox(height: 2),
-          ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${s.active} of ${s.total} ARs in this batch',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            children: [
+              _legend(colors, 'Approved', s.approved, colors.success),
+              _legend(colors, 'In review', s.inReview, colors.info),
+              _legend(
+                colors,
+                'For resubmission',
+                s.forResubmission,
+                colors.error,
+              ),
+              _legend(colors, 'Invalid', s.invalid, colors.error),
+              _legend(colors, 'Forwarded', s.forwarded, colors.textSecondary),
+            ],
+          ),
+          const SizedBox(height: 10),
           Text(
             'Updated ${_formatDate(report.updatedAt)}',
             style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
@@ -217,15 +210,45 @@ class ReportDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _remarksCard(AppColors colors, String remarks) {
+  Widget _legend(AppColors colors, String label, int count, Color dot) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$count $label',
+          style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
+        ),
+      ],
+    );
+  }
+
+  /// Replaces the old rejection-remarks card: surfaces ARs needing action.
+  Widget _attentionCard(AppColors colors, ArSummary s) {
+    final urgent = s.forResubmission + s.invalid > 0;
+    final color = urgent ? colors.error : colors.textSecondary;
+    final lines = [
+      if (s.forResubmission > 0)
+        '${s.forResubmission} AR${s.forResubmission == 1 ? '' : 's'} '
+            'rejected, awaiting resubmission',
+      if (s.invalid > 0) '${s.invalid} invalid (removed from this batch)',
+      if (s.forwarded > 0)
+        '${s.forwarded} missed the cutoff and moved to the next period',
+    ];
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: colors.error.withValues(alpha: 0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.error.withValues(alpha: 0.35)),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,10 +257,10 @@ class ReportDetailScreen extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: colors.error.withValues(alpha: 0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.error_outline, color: colors.error, size: 20),
+            child: Icon(Icons.error_outline, color: color, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -245,26 +268,76 @@ class ReportDetailScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Rejection Remarks',
+                  'ARs Need Attention',
                   style: TextStyle(
-                    color: colors.error,
+                    color: color,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  remarks,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 13.5,
-                    height: 1.45,
+                for (final l in lines)
+                  Text(
+                    l,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 13.5,
+                      height: 1.45,
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: _openArs,
+                  child: Text(
+                    'Review ARs',
+                    style: TextStyle(
+                      color: colors.accentActive,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Clickable AR count that opens the AR list.
+  Widget _arsButton(AppColors colors, int total) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _openArs,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ARs Logged',
+              style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    '$total ${total == 1 ? 'AR' : 'ARs'}',
+                    style: TextStyle(
+                      color: colors.accentActive,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: colors.accentActive),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -340,8 +413,18 @@ class ReportDetailScreen extends StatelessWidget {
 
   String _formatDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }

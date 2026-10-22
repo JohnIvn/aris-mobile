@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/report_item.dart';
 import '../models/status.dart';
+import '../services/ar_service.dart';
 import '../services/mock_data_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
@@ -134,20 +135,24 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  /// Summary of all reports (not just the filtered ones)
+  /// Summary of all reports (not just the filtered ones), based on the
+  /// AR verification progress of each report.
   Widget _summaryCard(AppColors colors, List<ReportItem> all) {
     final total = all.length;
-    final completed = all
-        .where((r) => r.stage == PipelineStage.completed)
+    final sums = all.map((r) => ArService().summarize(r)).toList();
+    final verified = sums.where((s) => s.percent == 100).length;
+    final needsAction = sums
+        .where((s) => s.percent < 100 && s.needsAction)
         .length;
-    final rejected = all.where((r) => r.stage == PipelineStage.rejected).length;
-    final pending = total - completed - rejected;
+    final inVerification = total - verified - needsAction;
+    final overall =
+        (sums.fold<int>(0, (a, s) => a + s.percent) / total).round();
     String pct(int n) => '${(n * 100 / total).round()}%';
 
     final segments = <(int, Color)>[
-      (completed, colors.success),
-      (rejected, colors.error),
-      (pending, colors.warning),
+      (verified, colors.success),
+      (inVerification, colors.warning),
+      (needsAction, colors.error),
     ].where((s) => s.$1 > 0).toList();
 
     return SectionCard(
@@ -173,6 +178,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 total == 1 ? 'report' : 'reports',
                 style: TextStyle(color: colors.textSecondary, fontSize: 14),
               ),
+              const Spacer(),
+              Text(
+                '$overall%',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'verified',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
+              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -182,28 +201,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
               Expanded(
                 child: _summaryStat(
                   colors,
-                  'Completed',
-                  completed,
-                  pct(completed),
+                  'Verified',
+                  verified,
+                  pct(verified),
                   colors.success,
                 ),
               ),
               Expanded(
                 child: _summaryStat(
                   colors,
-                  'Rejected',
-                  rejected,
-                  pct(rejected),
-                  colors.error,
+                  'In verification',
+                  inVerification,
+                  pct(inVerification),
+                  colors.warning,
                 ),
               ),
               Expanded(
                 child: _summaryStat(
                   colors,
-                  'In progress',
-                  pending,
-                  pct(pending),
-                  colors.warning,
+                  'Needs action',
+                  needsAction,
+                  pct(needsAction),
+                  colors.error,
                 ),
               ),
             ],
@@ -289,17 +308,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
     ReportItem report,
   ) {
     final isFocused = report.id == widget.focusedReportId;
+    final s = ArService().summarize(report);
+    final attention = s.forResubmission + s.invalid + s.forwarded;
+    final attentionColor = (s.forResubmission + s.invalid) > 0
+        ? colors.error
+        : colors.textSecondary;
+
     return SectionCard(
       padding: EdgeInsets.zero,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ReportDetailScreen(report: report),
-            ),
-          ),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ReportDetailScreen(report: report),
+              ),
+            );
+            if (mounted) setState(() {});
+          },
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
@@ -357,14 +385,44 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         _hours(report.dtrTotalHours),
                       ),
                     ),
-                    Expanded(
-                      child: _stat(colors, 'AR tasks', '${report.arTaskTally}'),
-                    ),
+                    Expanded(child: _stat(colors, 'ARs', '${s.total}')),
                     Icon(Icons.chevron_right, color: colors.textSecondary),
                   ],
                 ),
-                if (report.stage == PipelineStage.rejected &&
-                    report.rejectionRemarks != null) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Text(
+                      'Verification',
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${s.percent}%',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: s.percent / 100,
+                    minHeight: 6,
+                    backgroundColor: colors.border.withValues(alpha: 0.5),
+                    valueColor: AlwaysStoppedAnimation(
+                      s.percent == 100 ? colors.success : colors.accentActive,
+                    ),
+                  ),
+                ),
+                if (attention > 0) ...[
                   const SizedBox(height: 14),
                   Container(
                     width: double.infinity,
@@ -373,7 +431,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: colors.error.withValues(alpha: 0.08),
+                      color: attentionColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -381,17 +439,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       children: [
                         Icon(
                           Icons.error_outline,
-                          color: colors.error,
+                          color: attentionColor,
                           size: 16,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            report.rejectionRemarks!,
+                            [
+                              if (s.forResubmission > 0)
+                                '${s.forResubmission} for resubmission',
+                              if (s.invalid > 0) '${s.invalid} invalid',
+                              if (s.forwarded > 0)
+                                '${s.forwarded} forwarded to next period',
+                            ].join(' · '),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: colors.error,
+                              color: attentionColor,
                               fontSize: 12.5,
                               height: 1.35,
                             ),

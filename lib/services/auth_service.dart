@@ -184,12 +184,12 @@ class AuthService extends ChangeNotifier {
         'platform': _platform,
         'role': role,
         'employee_id': employeeId,
-        if (username != null) 'username': username,
-        if (middlename != null) 'middlename': middlename,
-        if (birthday != null) 'birthday': birthday,
-        if (gender != null) 'gender': gender,
-        if (position != null) 'position': position,
-        if (department != null) 'department': department,
+        'username': ?username,
+        'middlename': ?middlename,
+        'birthday': ?birthday,
+        'gender': ?gender,
+        'position': ?position,
+        'department': ?department,
       });
 
       _needsSignUp = false;
