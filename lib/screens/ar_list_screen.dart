@@ -36,11 +36,7 @@ class _ArListScreenState extends State<ArListScreen> {
         'Resubmit before the semi-monthly cutoff, otherwise it moves to the next period.',
         inGroup({ArStatus.forResubmission}),
       ),
-      (
-        'Submitted ARs',
-        null,
-        inGroup({ArStatus.inReview, ArStatus.approved}),
-      ),
+      ('Submitted ARs', null, inGroup({ArStatus.inReview, ArStatus.approved})),
       (
         'Invalid',
         'Removed from this batch so payroll is not delayed. Can be filed again next period.',
@@ -116,10 +112,7 @@ class _ArListScreenState extends State<ArListScreen> {
                 Text(
                   '${summary.active} of ${summary.total} ARs are in this '
                   'batch · ${summary.approved} approved',
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontSize: 12.5,
-                  ),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
                 ),
               ],
             ),
@@ -183,7 +176,8 @@ class _ArListScreenState extends State<ArListScreen> {
         onTap: () async {
           await Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ArDetailScreen(report: widget.report, arId: ar.id),
+              builder: (_) =>
+                  ArDetailScreen(report: widget.report, arId: ar.id),
             ),
           );
           if (mounted) setState(() {});
@@ -197,7 +191,7 @@ class _ArListScreenState extends State<ArListScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      ar.title,
+                      ar.course,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -208,7 +202,20 @@ class _ArListScreenState extends State<ArListScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Shift ${formatShortDate(ar.shiftDate)}',
+                      '${ar.code} · ${ar.program} ${ar.year}-${ar.section}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${ar.day}, ${formatShortDate(ar.classDate)} · '
+                      '${ar.shiftStart}–${ar.shiftEnd}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: colors.textSecondary,
                         fontSize: 12.5,

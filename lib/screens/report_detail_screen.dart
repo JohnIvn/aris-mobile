@@ -139,13 +139,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               ),
             ]),
           ),
-          SectionCard(
-            title: 'Accomplishment Report',
-            child: Text(
-              report.reportNarrative,
-              style: TextStyle(color: colors.text, fontSize: 14, height: 1.5),
-            ),
-          ),
         ],
       ),
     );

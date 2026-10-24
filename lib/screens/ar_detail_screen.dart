@@ -131,7 +131,9 @@ class _ArDetailScreenState extends State<ArDetailScreen> {
         scrolledUnderElevation: 0,
         centerTitle: false,
         title: Text(
-          ar.title,
+          ar.course,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
       ),
@@ -164,16 +166,46 @@ class _ArDetailScreenState extends State<ArDetailScreen> {
             ),
           ),
           SectionCard(
+            title: 'Class Details',
+            child: Column(
+              children: [
+                _detailRow(colors, 'Course', ar.course),
+                _gap(colors),
+                _detailRow(colors, 'Code', ar.code),
+                _gap(colors),
+                _detailRow(
+                  colors,
+                  'Program',
+                  '${ar.program} ${ar.year}-${ar.section}',
+                ),
+                _gap(colors),
+                _detailRow(colors, 'Units', '${ar.units}'),
+                _gap(colors),
+                _detailRow(colors, 'Campus', ar.campus),
+              ],
+            ),
+          ),
+          SectionCard(
             title: 'Shift Details',
             child: Column(
               children: [
-                _detailRow(colors, 'Date of Shift', formatShortDate(ar.shiftDate)),
+                _detailRow(colors, 'Day', ar.day),
                 _gap(colors),
-                _detailRow(colors, 'Time', ar.shiftTime),
+                _detailRow(colors, 'Date', formatShortDate(ar.classDate)),
                 _gap(colors),
-                _detailRow(colors, 'Hours', '${ar.shiftHours.toStringAsFixed(1)} hrs'),
+                _detailRow(colors, 'Time', '${ar.shiftStart} – ${ar.shiftEnd}'),
                 _gap(colors),
-                _detailRow(colors, 'Submitted', formatShortDate(ar.submittedAt)),
+                _detailRow(
+                  colors,
+                  'Hours',
+                  '${ar.shiftHours.toStringAsFixed(1)} hrs',
+                ),
+                _gap(colors),
+                _detailRow(
+                  colors,
+                  'Submitted',
+                  formatShortDate(ar.submittedAt),
+                ),
                 if (ar.resubmissions > 0) ...[
                   _gap(colors),
                   _detailRow(colors, 'Resubmissions', '${ar.resubmissions}'),
@@ -196,9 +228,16 @@ class _ArDetailScreenState extends State<ArDetailScreen> {
             ),
           ),
           SectionCard(
-            title: 'Accomplishment Report',
+            title: 'Topics',
             child: Text(
-              ar.narrative,
+              ar.topics,
+              style: TextStyle(color: colors.text, fontSize: 14, height: 1.5),
+            ),
+          ),
+          SectionCard(
+            title: 'Description',
+            child: Text(
+              ar.description,
               style: TextStyle(color: colors.text, fontSize: 14, height: 1.5),
             ),
           ),

@@ -87,26 +87,99 @@ class ArService {
 
   // ---- mock generation ----------------------------------------------------
 
-  static const _titles = [
-    'Lecture delivery',
-    'Consultation hours',
-    'Thesis advising',
-    'Curriculum review',
-    'Laboratory supervision',
-    'Exam proctoring',
-    'Department meeting',
+  static const _weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  // (course, code, program, year, section, units, topics, description)
+  static const _courses = [
+    (
+      'Web Systems and Technologies',
+      'IT 301',
+      'BSIT',
+      3,
+      'A',
+      3,
+      'RESTful APIs and routing',
+      'Delivered the lecture and guided the class through the hands-on exercise.',
+    ),
+    (
+      'Database Management Systems',
+      'IT 204',
+      'BSIT',
+      2,
+      'B',
+      3,
+      'Normalization and joins',
+      'Discussed normal forms and facilitated the in-class query activity.',
+    ),
+    (
+      'Capstone Project 1',
+      'IT 401',
+      'BSIT',
+      4,
+      'A',
+      3,
+      'Proposal defense preparation',
+      'Advised the groups on their proposal documents and revisions.',
+    ),
+    (
+      'Data Structures and Algorithms',
+      'CS 202',
+      'BSCS',
+      2,
+      'A',
+      3,
+      'Trees and graph traversal',
+      'Lectured on traversal strategies and checked the seatwork outputs.',
+    ),
+    (
+      'Programming Laboratory',
+      'IT 102L',
+      'BSIT',
+      1,
+      'C',
+      1,
+      'Loops and arrays',
+      'Supervised the laboratory session and assessed the exercises.',
+    ),
+    (
+      'Information Assurance',
+      'IT 405',
+      'BSIT',
+      4,
+      'B',
+      3,
+      'Access control models',
+      'Proctored the quiz and discussed the results afterwards.',
+    ),
+    (
+      'Software Engineering',
+      'IT 303',
+      'BSIT',
+      3,
+      'B',
+      3,
+      'Agile and sprint planning',
+      'Facilitated the sprint planning workshop with the project teams.',
+    ),
   ];
 
   List<ArItem> _generate(ReportItem r) {
     final now = DateTime.now();
-    return [
-      for (var i = 0; i < r.arTaskTally; i++) _mockAr(r, i, now),
-    ];
+    return [for (var i = 0; i < r.arTaskTally; i++) _mockAr(r, i, now)];
   }
 
   ArItem _mockAr(ReportItem r, int i, DateTime now) {
-    final title = _titles[i % _titles.length];
+    final c = _courses[i % _courses.length];
     final base = DateTime(r.shiftDate.year, r.shiftDate.month, r.shiftDate.day);
+    final classDate = base.add(Duration(days: i));
 
     // How many stages approved, and whether a stage then rejected.
     int approvedCount;
@@ -159,7 +232,7 @@ class ArService {
             decidedAt: now.subtract(const Duration(days: 1)),
             reviewer: '${stages[s].label} Reviewer',
             remarks: kind == RejectionKind.invalid
-                ? 'Shift does not match the biometric record for this date.'
+                ? 'Class does not match the biometric record for this date.'
                 : 'Please attach the missing details of the activity and resubmit.',
           )
         else
@@ -169,13 +242,20 @@ class ArService {
     return ArItem(
       id: '${r.id}-ar-${i + 1}',
       reportId: r.id,
-      title: '${i + 1}. $title',
-      narrative:
-          '$title for the period. Completed the scheduled tasks and '
-          'submitted the corresponding outputs.',
-      shiftDate: base.add(Duration(days: i)),
-      shiftTime: '8:00 AM – 5:00 PM',
-      shiftHours: 8,
+      course: c.$1,
+      code: c.$2,
+      program: c.$3,
+      year: c.$4,
+      section: c.$5,
+      units: c.$6,
+      day: _weekdays[classDate.weekday - 1],
+      shiftHours: 3,
+      shiftStart: '08:00',
+      shiftEnd: '11:00',
+      campus: 'Main Campus',
+      classDate: classDate,
+      topics: c.$7,
+      description: c.$8,
       submittedAt: now.subtract(const Duration(days: 5)),
       approvals: approvals,
       rejectionKind: kind,

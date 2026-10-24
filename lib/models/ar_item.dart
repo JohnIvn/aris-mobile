@@ -51,11 +51,23 @@ class ArApproval {
 class ArItem {
   final String id;
   final String reportId;
-  final String title;
-  final String narrative;
-  final DateTime shiftDate;
-  final String shiftTime;
+
+  // Mirrors the report_entries table.
+  final String course;
+  final String code;
+  final String program;
+  final int year;
+  final String section;
+  final int units;
+  final String day;
   final double shiftHours;
+  final String shiftStart; // HH:mm
+  final String shiftEnd; // HH:mm
+  final String campus;
+  final DateTime classDate;
+  final String topics;
+  final String description;
+
   final DateTime submittedAt;
   final List<ArApproval> approvals; // department -> hr -> accounting
   final RejectionKind? rejectionKind;
@@ -67,11 +79,20 @@ class ArItem {
   const ArItem({
     required this.id,
     required this.reportId,
-    required this.title,
-    required this.narrative,
-    required this.shiftDate,
-    required this.shiftTime,
+    required this.course,
+    required this.code,
+    required this.program,
+    required this.year,
+    required this.section,
+    required this.units,
+    required this.day,
     required this.shiftHours,
+    required this.shiftStart,
+    required this.shiftEnd,
+    required this.campus,
+    required this.classDate,
+    required this.topics,
+    required this.description,
     required this.submittedAt,
     required this.approvals,
     this.rejectionKind,
@@ -123,9 +144,7 @@ class ArItem {
 
   /// Cutoff of the submission period after the one this AR missed / was removed from.
   DateTime get nextPeriodCutoff => semiMonthlyCutoff(
-    (resubmitBy ?? semiMonthlyCutoff(submittedAt)).add(
-      const Duration(days: 1),
-    ),
+    (resubmitBy ?? semiMonthlyCutoff(submittedAt)).add(const Duration(days: 1)),
   );
 
   /// Resubmission resumes at the stage that rejected it.
@@ -136,11 +155,20 @@ class ArItem {
     return ArItem(
       id: id,
       reportId: reportId,
-      title: title,
-      narrative: narrative,
-      shiftDate: shiftDate,
-      shiftTime: shiftTime,
+      course: course,
+      code: code,
+      program: program,
+      year: year,
+      section: section,
+      units: units,
+      day: day,
       shiftHours: shiftHours,
+      shiftStart: shiftStart,
+      shiftEnd: shiftEnd,
+      campus: campus,
+      classDate: classDate,
+      topics: topics,
+      description: description,
       submittedAt: now,
       approvals: [
         for (var i = 0; i < approvals.length; i++)
