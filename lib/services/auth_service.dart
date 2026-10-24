@@ -126,41 +126,75 @@ class AuthService extends ChangeNotifier {
     _needsSignUp = false;
     notifyListeners();
 
+    debugPrint('[OAuth] Starting Google sign-in...');
+
     try {
+      debugPrint('[OAuth] Base URL: $_baseUrl');
+      debugPrint('[OAuth] Web Client ID: $_webClientId');
+      debugPrint('[OAuth] Platform: $_platform');
+
       if (_baseUrl.isEmpty || _webClientId.isEmpty) {
         throw AuthException(
           'Missing SERVER_URL / WEB_GOOGLE_CLIENT_ID in .env',
         );
       }
 
+      debugPrint('[OAuth] Getting Google ID token...');
       final idToken = await _getIdToken();
       _pendingIdToken = idToken;
 
-      final data = await _post('/auth/google/mobile/signin', {
-        'id_token': idToken,
-        'platform': _platform,
-      });
+      debugPrint('[OAuth] ID token received: $idToken');
+
+      final payload = {'id_token': idToken, 'platform': _platform};
+
+      debugPrint('[OAuth] Sending POST request...');
+      debugPrint('[OAuth] Endpoint: $_baseUrl/auth/google/mobile/signin');
+      debugPrint('[OAuth] Payload: $payload');
+
+      final data = await _post('/auth/google/mobile/signin', payload);
+
+      debugPrint('[OAuth] Server response: $data');
 
       _pendingIdToken = null;
+
+      debugPrint('[OAuth] Persisting authentication data...');
       await _persist(data);
-    } on AuthException catch (e) {
+
+      debugPrint('[OAuth] Sign-in successful!');
+    } on AuthException catch (e, st) {
+      debugPrint('[OAuth] AuthException: ${e.message}');
+      debugPrint('[OAuth] Status code: ${e.statusCode}');
+      debugPrint('[OAuth] Cancelled: ${e.cancelled}');
+      debugPrint('[OAuth] Stack trace: $st');
+
+      _pendingIdToken = null;
       _status = AuthStatus.unauthenticated;
+
       if (e.statusCode == 404) {
         _needsSignUp = true;
+        debugPrint('[OAuth] Account not found. Sign-up required.');
       } else if (!e.cancelled) {
         _error = e.message;
       }
     } catch (e, st) {
-      debugPrint('signIn error: $e\n$st');
+      debugPrint('[OAuth] Unexpected error: $e');
+      debugPrint('[OAuth] Stack trace:\n$st');
+
+      _pendingIdToken = null;
       _status = AuthStatus.unauthenticated;
       _error = kDebugMode
           ? 'Sign-in failed: $e'
           : 'Sign-in failed. Please try again.';
     }
+
+    debugPrint('[OAuth] Final status: $_status');
+    debugPrint('[OAuth] Error: $_error');
+    debugPrint('[OAuth] Needs sign-up: $_needsSignUp');
+
     notifyListeners();
   }
 
-  /// Reuses the ID token from the 404'd sign-in, so no second Google prompt.
+  // THIS WONT BE USED
   Future<void> signUpWithGoogle({
     required String role, // 'staff' | 'professor'
     required String employeeId,
@@ -240,8 +274,14 @@ class AuthService extends ChangeNotifier {
       }
       return idToken;
     } on GoogleSignInException catch (e) {
+      debugPrint(
+        '[OAuth] GoogleSignInException code=${e.code} description=${e.description} details=${e.details}',
+      );
       if (e.code == GoogleSignInExceptionCode.canceled) {
-        throw AuthException('Sign-in cancelled', cancelled: true);
+        throw AuthException(
+          'Sign-in cancelled (${e.description ?? 'no details'})',
+          cancelled: true,
+        );
       }
       throw AuthException(
         'Google sign-in failed: ${e.description ?? e.code.name}',
