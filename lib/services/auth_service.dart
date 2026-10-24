@@ -126,12 +126,8 @@ class AuthService extends ChangeNotifier {
     _needsSignUp = false;
     notifyListeners();
 
-    debugPrint('[OAuth] Starting Google sign-in...');
 
     try {
-      debugPrint('[OAuth] Base URL: $_baseUrl');
-      debugPrint('[OAuth] Web Client ID: $_webClientId');
-      debugPrint('[OAuth] Platform: $_platform');
 
       if (_baseUrl.isEmpty || _webClientId.isEmpty) {
         throw AuthException(
@@ -139,25 +135,17 @@ class AuthService extends ChangeNotifier {
         );
       }
 
-      debugPrint('[OAuth] Getting Google ID token...');
       final idToken = await _getIdToken();
       _pendingIdToken = idToken;
 
-      debugPrint('[OAuth] ID token received: $idToken');
 
       final payload = {'id_token': idToken, 'platform': _platform};
 
-      debugPrint('[OAuth] Sending POST request...');
-      debugPrint('[OAuth] Endpoint: $_baseUrl/auth/google/mobile/signin');
-      debugPrint('[OAuth] Payload: $payload');
 
       final data = await _post('/auth/google/mobile/signin', payload);
 
-      debugPrint('[OAuth] Server response: $data');
-
       _pendingIdToken = null;
 
-      debugPrint('[OAuth] Persisting authentication data...');
       await _persist(data);
 
       debugPrint('[OAuth] Sign-in successful!');
@@ -189,7 +177,6 @@ class AuthService extends ChangeNotifier {
 
     debugPrint('[OAuth] Final status: $_status');
     debugPrint('[OAuth] Error: $_error');
-    debugPrint('[OAuth] Needs sign-up: $_needsSignUp');
 
     notifyListeners();
   }
