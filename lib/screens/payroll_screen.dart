@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/report_item.dart';
 import '../models/status.dart';
-import '../services/mock_data_service.dart';
+import '../stores/report_stores.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
@@ -17,20 +17,41 @@ class PayrollScreen extends StatefulWidget {
 }
 
 class _PayrollScreenState extends State<PayrollScreen> {
+  final _store = ReportsStore();
+  final _scroll = ScrollController();
   final _searchController = TextEditingController();
   String _query = '';
   PayrollStatus? _filterStatus; // null = All
 
   @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+    if (_store.reports.isEmpty) _store.load();
+  }
+
+  @override
   void dispose() {
+    _scroll.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onScroll() {
+    if (_scroll.position.extentAfter < 300) _store.loadMore();
+  }
+
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _store,
+      builder: (context, _) => _content(context),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final allReports = MockDataService().getReports();
+    final allReports = _store.reports;
 
     // Overview counts always reflect everything, regardless of the
     // current search/filter narrowing the list below.
@@ -54,83 +75,128 @@ class _PayrollScreenState extends State<PayrollScreen> {
 
     return Container(
       color: colors.canvas,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-        children: [
-          Text(
-            'Payroll',
-            style: TextStyle(
-              color: colors.text,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
+      child: RefreshIndicator(
+        onRefresh: _store.load,
+        child: ListView(
+          controller: _scroll,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          children: [
+            Text(
+              'Payroll',
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Unlocks once Department, HR, and Accounting have all '
-            'verified a period\'s AR & DTR.',
-            style: TextStyle(
-              color: colors.textSecondary,
-              fontSize: 13,
-              height: 1.4,
+            const SizedBox(height: 4),
+            Text(
+              'Unlocks once Department, HR, and Accounting have all '
+              'verified a period\'s AR & DTR.',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 13,
+                height: 1.4,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _overviewCard(
-            colors,
-            total: allReports.length,
-            available: available,
-            received: received,
-            pending: pending,
-          ),
-          _searchField(
-            colors,
-            controller: _searchController,
-            hint: 'Search by period',
-            onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
-            onClear: () => setState(() => _query = ''),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 38,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _filterChip(
-                  colors,
-                  label: 'All',
-                  selected: _filterStatus == null,
-                  onTap: () => setState(() => _filterStatus = null),
-                ),
-                const SizedBox(width: 8),
-                for (final status in PayrollStatus.values) ...[
+            const SizedBox(height: 16),
+            _overviewCard(
+              colors,
+              total: allReports.length,
+              available: available,
+              received: received,
+              pending: pending,
+            ),
+            _searchField(
+              colors,
+              controller: _searchController,
+              hint: 'Search by period',
+              onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+              onClear: () => setState(() => _query = ''),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 38,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
                   _filterChip(
                     colors,
-                    label: status.label,
-                    selected: _filterStatus == status,
-                    onTap: () => setState(() => _filterStatus = status),
+                    label: 'All',
+                    selected: _filterStatus == null,
+                    onTap: () => setState(() => _filterStatus = null),
                   ),
                   const SizedBox(width: 8),
+                  for (final status in PayrollStatus.values) ...[
+                    _filterChip(
+                      colors,
+                      label: status.label,
+                      selected: _filterStatus == status,
+                      onTap: () => setState(() => _filterStatus = status),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          if (reports.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'No payroll records match your search or filter.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.textSecondary, fontSize: 13),
+            const SizedBox(height: 16),
+            if (reports.isEmpty)
+              _emptyState(colors, allReports.isEmpty)
+            else
+              for (final report in reports)
+                _payrollTile(context, colors, report),
+            if (_store.loadingMore)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
                 ),
               ),
-            )
-          else
-            for (final report in reports) _payrollTile(context, colors, report),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState(AppColors colors, bool noData) {
+    if (noData && _store.loading) {
+      return const Padding(
+        padding: EdgeInsets.all(48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (noData && _store.error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          children: [
+            Text(
+              'Could not load payroll.\n${_store.error}',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.error, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: _store.load, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Text(
+          noData
+              ? 'No payroll records yet.'
+              : 'No payroll records match your search or filter.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colors.textSecondary, fontSize: 13),
+        ),
       ),
     );
   }
@@ -293,12 +359,14 @@ class _PayrollScreenState extends State<PayrollScreen> {
   }
 
   String _subtitleFor(ReportItem report) {
-    if (report.payrollStatus == PayrollStatus.received &&
-        report.payrollReceivedAt != null) {
-      return 'Received ${_formatDate(report.payrollReceivedAt!)}';
-    } else if (report.payrollStatus == PayrollStatus.available &&
-        report.payrollAvailableAt != null) {
-      return 'Available since ${_formatDate(report.payrollAvailableAt!)}';
+    if (report.payrollStatus == PayrollStatus.received) {
+      return report.payrollReceivedAt != null
+          ? 'Received ${_formatDate(report.payrollReceivedAt!)}'
+          : 'Received';
+    } else if (report.payrollStatus == PayrollStatus.available) {
+      return report.payrollAvailableAt != null
+          ? 'Available since ${_formatDate(report.payrollAvailableAt!)}'
+          : 'Payroll is ready for release';
     }
     return 'Awaiting full AR & DTR verification';
   }
@@ -495,8 +563,18 @@ class _PayrollScreenState extends State<PayrollScreen> {
 
   String _formatDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }

@@ -227,12 +227,7 @@ class _DtrScreenState extends State<DtrScreen> {
           Row(
             children: [
               Expanded(
-                child: _summaryStat(
-                  colors,
-                  'Present',
-                  present,
-                  colors.success,
-                ),
+                child: _summaryStat(colors, 'Present', present, colors.success),
               ),
               Expanded(
                 child: _summaryStat(colors, 'Late', late, colors.warning),
@@ -532,8 +527,18 @@ class _DtrScreenState extends State<DtrScreen> {
   }
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String _month(DateTime d) => _months[d.month - 1];

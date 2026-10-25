@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/ar_item.dart';
+import '../models/dtr_entry.dart';
 import '../models/report_item.dart';
 import '../models/status.dart';
 import '../services/ar_service.dart';
@@ -30,6 +31,7 @@ class ReportsStore extends ChangeNotifier {
 
   List<ReportItem> _reports = const [];
   final Map<String, int> _stageNo = {};
+  final Map<String, List<DtrEntry>> _dtr = {};
   bool _loading = false;
   bool _loadingMore = false;
   bool _hasMore = true;
@@ -44,6 +46,9 @@ class ReportsStore extends ChangeNotifier {
 
   /// Backend stage of a report: 1 pending, 2 department, 3 HR, 4 accounting.
   int stageOf(ReportItem r) => _stageNo[r.id] ?? 1;
+
+  /// Daily DTR rows of a report, oldest first.
+  List<DtrEntry> dtrEntriesOf(ReportItem r) => _dtr[r.id] ?? const [];
 
   ReportItem? byId(String id) {
     for (final r in _reports) {
@@ -107,6 +112,14 @@ class ReportsStore extends ChangeNotifier {
       }
 
       final body = jsonDecode(res.body);
+
+      // Backend ErrorHandler shape: {status, ok: false, code, error, data}
+      if (body is Map && (body['ok'] == false || body['status'] == 'failure')) {
+        throw Exception(
+          'Server error ${body['code'] ?? ''}: '
+          '${body['error'] ?? body['message'] ?? 'unknown'}',
+        );
+      }
       final rows = _extractRows(body);
       debugPrint(
         '[ReportsStore] offset=${reset ? 0 : _offset} rows=${rows.length}',
@@ -167,12 +180,37 @@ class ReportsStore extends ChangeNotifier {
 
   /// Backend stage code -> pipeline stage. Adjust to match your backend.
   PipelineStage _pipelineStage(int n) => switch (n) {
-    1 || 2 => PipelineStage.submitted,
+    1 => PipelineStage.submitted,
+    2 => PipelineStage.department,
     3 => PipelineStage.hr,
-    _ => PipelineStage.completed,
+    _ => PipelineStage.accounting,
   };
 
   String _hm(String t) => t.length >= 5 ? t.substring(0, 5) : t;
+
+  /// '13:30' / '13:30:00' -> '1:30 PM'
+  String? _ampm(Object? v) {
+    final t = _s(v);
+    if (t.isEmpty) return null;
+    final p = t.split(':');
+    final h = int.tryParse(p[0]);
+    if (h == null) return t;
+    final m = p.length > 1 ? p[1].padLeft(2, '0') : '00';
+    final h12 = h % 12 == 0 ? 12 : h % 12;
+    return '$h12:$m ${h < 12 ? 'AM' : 'PM'}';
+  }
+
+  DtrEntry _dtrEntry(Map<String, dynamic> e, DateTime fallback) => DtrEntry(
+    date: _dt(e['date'], fallback),
+    timeIn: _ampm(e['time_in']),
+    timeOut: _ampm(e['time_out']),
+    status: DtrDayStatus.values.firstWhere(
+      (s) => s.name == e['status'],
+      orElse: () => DtrDayStatus.present,
+    ),
+  );
+
+  bool _b(Object? v) => v == true || '$v'.toLowerCase() == 'true';
 
   String _s(Object? v, [String fallback = '']) => v?.toString() ?? fallback;
   int _i(Object? v, [int fallback = 0]) =>
@@ -241,6 +279,11 @@ class ReportsStore extends ChangeNotifier {
               : 0.0)
         : _d(dtr);
 
+    _dtr[id] = [
+      for (final e in (j['dtrEntries'] as List?) ?? const [])
+        _dtrEntry(Map<String, dynamic>.from(e as Map), updatedAt),
+    ];
+
     final shiftDate = ars.isEmpty
         ? updatedAt
         : ars.map((a) => a.classDate).reduce((a, b) => a.isBefore(b) ? a : b);
@@ -258,7 +301,11 @@ class ReportsStore extends ChangeNotifier {
       reportNarrative: _s(j['remarks']),
       dtrTally: dtrHours,
       arTaskTally: ars.length,
-      payrollStatus: PayrollStatus.notAvailable,
+      // The backend only says whether payroll is available; there is no
+      // "received" signal yet.
+      payrollStatus: _b(j['payroll_availability'])
+          ? PayrollStatus.available
+          : PayrollStatus.notAvailable,
     );
   }
 }

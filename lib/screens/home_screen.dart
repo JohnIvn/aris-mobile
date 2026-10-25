@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../models/report_item.dart';
 import '../models/status.dart';
-import '../services/mock_data_service.dart';
+import '../stores/report_stores.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
 import '../widgets/status_badge.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final void Function({String? reportId}) onSeeReports;
   final VoidCallback onSeePayroll;
 
@@ -19,127 +19,202 @@ class HomeScreen extends StatelessWidget {
   });
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final _store = ReportsStore();
+
+  @override
+  void initState() {
+    super.initState();
+    if (_store.reports.isEmpty) _store.load();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _store,
+      builder: (context, _) => _content(context),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final data = MockDataService();
-    final reports = data.getReports();
-    final latest = reports.first;
-    final next = _nextAction(latest);
-    final nextColor = next.color(colors);
+
+    // The backend sorts newest first.
+    final ReportItem? latest = _store.reports.isEmpty
+        ? null
+        : _store.reports.first;
 
     return Container(
       color: colors.canvas,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-        children: [
-          _header(colors),
-          const SizedBox(height: 14),
-          _datePill(colors),
-          const SizedBox(height: 20),
-          SectionCard(
-            title: 'Current Payroll Period',
-            action: CardActionButton(label: 'Details', onTap: onSeePayroll),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  MockDataService.currentPayrollPeriod,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _stat(
-                        colors,
-                        'DTR hours',
-                        _hours(latest.dtrTally),
-                      ),
-                    ),
-                    Expanded(
-                      child: _stat(colors, 'AR tasks', '${latest.arTaskTally}'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          SectionCard(
-            title: 'Submission Status',
-            action: CardActionButton(
-              label: 'Reports',
-              onTap: () => onSeeReports(),
-            ),
-            child: Column(
-              children: [
-                // AR and DTR are submitted and verified together, so
-                // they share a single stage instead of two rows.
-                _statusRow(
-                  colors,
-                  'AR & DTR',
-                  latest.stage.label,
-                  latest.stage.colorKind,
-                ),
-                Divider(
-                  height: 28,
-                  thickness: 1,
-                  color: colors.border.withValues(alpha: 0.5),
-                ),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onSeePayroll,
-                  child: _statusRow(
-                    colors,
-                    'Payroll',
-                    latest.payrollStatus.label,
-                    latest.payrollStatus.colorKind,
-                    chevron: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SectionCard(
-            title: 'Next Action',
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: nextColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(next.icon, color: nextColor, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    next.text,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: RefreshIndicator(
+        onRefresh: _store.load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          children: [
+            _header(colors, latest),
+            const SizedBox(height: 14),
+            _datePill(colors),
+            const SizedBox(height: 20),
+            if (latest == null)
+              _emptyState(colors)
+            else
+              ..._cards(colors, latest),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _header(AppColors colors) {
-    final name = MockDataService.currentUserName;
+  List<Widget> _cards(AppColors colors, ReportItem latest) {
+    final stage = _store.stageOf(latest);
+    final stageKind = stage == 4
+        ? StatusColorKind.success
+        : StatusColorKind.info;
+    final next = _nextAction(latest, stage);
+    final nextColor = next.color(colors);
+
+    return [
+      SectionCard(
+        title: 'Current Payroll Period',
+        action: CardActionButton(label: 'Details', onTap: widget.onSeePayroll),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              latest.periodLabel,
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _stat(colors, 'DTR hours', _hours(latest.dtrTally)),
+                ),
+                Expanded(
+                  child: _stat(colors, 'AR tasks', '${latest.arTaskTally}'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      SectionCard(
+        title: 'Submission Status',
+        action: CardActionButton(
+          label: 'Reports',
+          onTap: () => widget.onSeeReports(reportId: latest.id),
+        ),
+        child: Column(
+          children: [
+            // AR and DTR are submitted and verified together, so
+            // they share a single stage instead of two rows.
+            _statusRow(
+              colors,
+              'AR & DTR',
+              ReportsStore.stageLabels[stage - 1],
+              stageKind,
+            ),
+            Divider(
+              height: 28,
+              thickness: 1,
+              color: colors.border.withValues(alpha: 0.5),
+            ),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onSeePayroll,
+              child: _statusRow(
+                colors,
+                'Payroll',
+                latest.payrollStatus.label,
+                latest.payrollStatus.colorKind,
+                chevron: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+      SectionCard(
+        title: 'Next Action',
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: nextColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(next.icon, color: nextColor, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                next.text,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _emptyState(AppColors colors) {
+    if (_store.loading) {
+      return const Padding(
+        padding: EdgeInsets.all(48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_store.error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          children: [
+            Text(
+              'Could not load your reports.\n${_store.error}',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.error, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: _store.load, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Text(
+          'No reports yet.',
+          style: TextStyle(color: colors.textSecondary, fontSize: 13),
+        ),
+      ),
+    );
+  }
+
+  Widget _header(AppColors colors, ReportItem? latest) {
+    // Prefer the signed-in user; fall back to the report's professor.
+    final full = (_store.auth?.user?.name.isNotEmpty ?? false)
+        ? _store.auth!.user!.name
+        : (latest?.professorName ?? '');
+    final name = full.trim().split(RegExp(r'\s+')).first;
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
+
     return Row(
       children: [
         Container(
@@ -165,7 +240,7 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Good morning, $name',
+                name.isEmpty ? 'Good morning' : 'Good morning, $name',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -275,68 +350,48 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// What to show in "Next Action", driven by the combined AR+DTR
-  /// stage and — once that's completed — the payroll status.
-  _NextAction _nextAction(ReportItem latest) {
-    switch (latest.stage) {
-      case PipelineStage.rejected:
+  /// What to show in "Next Action": payroll first once it is available,
+  /// otherwise the report's backend stage (1 pending .. 4 accounting).
+  _NextAction _nextAction(ReportItem latest, int stage) {
+    switch (latest.payrollStatus) {
+      case PayrollStatus.available:
         return _NextAction(
-          Icons.error_outline,
-          'Resubmit corrected AR & DTR',
-          (c) => c.error,
+          Icons.payments_outlined,
+          'Payroll is available for release',
+          (c) => c.info,
         );
-      case PipelineStage.draft:
+      case PayrollStatus.received:
         return _NextAction(
-          Icons.edit_outlined,
-          'Finish and submit your AR & DTR',
-          (c) => c.warning,
+          Icons.check_circle_outline,
+          'No action required',
+          (c) => c.accent,
         );
-      case PipelineStage.submitted:
-        return _NextAction(
-          Icons.hourglass_empty,
-          'Submitted — awaiting Department Secretary verification',
-          (c) => c.warning,
-        );
-      case PipelineStage.department:
-        return _NextAction(
-          Icons.hourglass_empty,
-          'Awaiting Department Secretary verification',
-          (c) => c.warning,
-        );
-      case PipelineStage.hr:
-        return _NextAction(
-          Icons.hourglass_empty,
-          'Awaiting HR verification',
-          (c) => c.warning,
-        );
-      case PipelineStage.accounting:
-        return _NextAction(
-          Icons.hourglass_empty,
-          'Awaiting Accounting verification',
-          (c) => c.warning,
-        );
-      case PipelineStage.completed:
-        switch (latest.payrollStatus) {
-          case PayrollStatus.available:
-            return _NextAction(
-              Icons.payments_outlined,
-              'Payroll is available for release',
-              (c) => c.info,
-            );
-          case PayrollStatus.received:
-            return _NextAction(
-              Icons.check_circle_outline,
-              'No action required',
-              (c) => c.accent,
-            );
-          case PayrollStatus.notAvailable:
-            return _NextAction(
-              Icons.hourglass_empty,
-              'Fully verified — payroll is being processed',
-              (c) => c.warning,
-            );
-        }
+      case PayrollStatus.notAvailable:
+        break;
     }
+
+    return switch (stage) {
+      1 => _NextAction(
+        Icons.hourglass_empty,
+        'Submitted — awaiting verification',
+        (c) => c.warning,
+      ),
+      2 => _NextAction(
+        Icons.hourglass_empty,
+        'Awaiting Department Secretary verification',
+        (c) => c.warning,
+      ),
+      3 => _NextAction(
+        Icons.hourglass_empty,
+        'Awaiting HR verification',
+        (c) => c.warning,
+      ),
+      _ => _NextAction(
+        Icons.hourglass_empty,
+        'Awaiting Accounting verification',
+        (c) => c.warning,
+      ),
+    };
   }
 
   String _formattedToday() {
