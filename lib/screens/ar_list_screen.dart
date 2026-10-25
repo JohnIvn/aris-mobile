@@ -6,7 +6,6 @@ import '../services/ar_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
-import '../widgets/status_badge.dart';
 import 'ar_detail_screen.dart';
 
 class ArListScreen extends StatefulWidget {
@@ -25,7 +24,6 @@ class _ArListScreenState extends State<ArListScreen> {
     final now = DateTime.now();
     final service = ArService();
     final ars = service.forReport(widget.report);
-    final summary = service.summarize(widget.report);
 
     List<ArItem> inGroup(Set<ArStatus> s) =>
         ars.where((a) => s.contains(a.statusAt(now))).toList();

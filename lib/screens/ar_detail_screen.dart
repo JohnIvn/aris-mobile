@@ -6,7 +6,6 @@ import '../services/ar_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
-import '../widgets/status_badge.dart';
 
 class ArDetailScreen extends StatefulWidget {
   final ReportItem report;
@@ -141,7 +140,7 @@ class _ArDetailScreenState extends State<ArDetailScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
           if (!status.isActive) _attentionCard(colors, ar, status),
-          
+
           SectionCard(
             title: 'Class Details',
             child: Column(
@@ -294,66 +293,6 @@ class _ArDetailScreenState extends State<ArDetailScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _approvalRow(AppColors colors, ArApproval a, bool isCurrent) {
-    final (icon, color) = switch (a.decision) {
-      ApprovalDecision.approved => (Icons.check_circle, colors.success),
-      ApprovalDecision.rejected => (Icons.cancel, colors.error),
-      ApprovalDecision.pending =>
-        isCurrent
-            ? (Icons.schedule, colors.warning)
-            : (Icons.radio_button_unchecked, colors.textSecondary),
-    };
-
-    final String subtitle;
-    if (a.decision == ApprovalDecision.pending) {
-      subtitle = isCurrent ? 'Awaiting review' : 'Not yet reached';
-    } else {
-      final who = a.reviewer ?? '';
-      final when = a.decidedAt == null ? '' : formatShortDate(a.decidedAt!);
-      subtitle = [who, when].where((s) => s.isNotEmpty).join(' · ');
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                a.stage.label,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
-              ),
-              if (a.decision == ApprovalDecision.rejected &&
-                  a.remarks != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  a.remarks!,
-                  style: TextStyle(
-                    color: colors.error,
-                    fontSize: 12.5,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
     );
   }
 

@@ -1,6 +1,5 @@
 import '../models/ar_item.dart';
 import '../models/report_item.dart';
-import '../models/status.dart';
 
 class ArSummary {
   final int total;

@@ -72,8 +72,8 @@ class AuthService extends ChangeNotifier {
 
   static String get _baseUrl => dotenv.env['SERVER_URL'] ?? '';
 
-  static String get _androidClientId =>
-      dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '';
+  // static String get _androidClientId =>
+  //     dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '';
 
   static String get _iosClientId => dotenv.env['IOS_GOOGLE_CLIENT_ID'] ?? '';
 
@@ -126,9 +126,7 @@ class AuthService extends ChangeNotifier {
     _needsSignUp = false;
     notifyListeners();
 
-
     try {
-
       if (_baseUrl.isEmpty || _webClientId.isEmpty) {
         throw AuthException(
           'Missing SERVER_URL / WEB_GOOGLE_CLIENT_ID in .env',
@@ -138,9 +136,7 @@ class AuthService extends ChangeNotifier {
       final idToken = await _getIdToken();
       _pendingIdToken = idToken;
 
-
       final payload = {'id_token': idToken, 'platform': _platform};
-
 
       final data = await _post('/auth/google/mobile/signin', payload);
 
