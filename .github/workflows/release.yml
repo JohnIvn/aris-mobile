@@ -2,9 +2,13 @@ name: Release
 
 on:
   push:
-    branches: [main]
-    paths: [pubspec.yaml]
+    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version/tag (e.g. 1.3.6 or v1.3.6). Leave empty to use pubspec.yaml version."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -13,35 +17,45 @@ jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
-      name: ${{ steps.v.outputs.name }}
-      full: ${{ steps.v.outputs.full }}
       tag: ${{ steps.v.outputs.tag }}
-      exists: ${{ steps.v.outputs.exists }}
+      version: ${{ steps.v.outputs.version }}
+      build_name: ${{ steps.v.outputs.build_name }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read version from pubspec.yaml
+      - name: Resolve version from tag
         id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT: ${{ github.event_name }}
         run: |
-          FULL=$(grep -m1 '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//' | tr -d '\r[:space:]')
-          NAME=${FULL%%+*}
-          TAG="v$NAME"
-
-          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
-            EXISTS=true
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          elif [ "$EVENT" = "push" ]; then
+            VERSION="${REF_NAME#v}"
           else
-            EXISTS=false
+            VERSION=$(grep -m1 '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//' | tr -d '\r[:space:]')
+            VERSION="${VERSION%%+*}"
           fi
 
-          echo "full=$FULL" >> $GITHUB_OUTPUT
-          echo "name=$NAME" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "exists=$EXISTS" >> $GITHUB_OUTPUT
-          echo "Version: $FULL | Tag: $TAG | Already released: $EXISTS"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Invalid version: $VERSION"
+            exit 1
+          fi
+
+          BUILD_NAME="${VERSION%%-*}"   # iOS needs plain x.y.z
+          case "$VERSION" in *-*) PRE=true;; *) PRE=false;; esac
+
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_name=$BUILD_NAME" >> $GITHUB_OUTPUT
+          echo "prerelease=$PRE" >> $GITHUB_OUTPUT
+          echo "Resolved: v$VERSION (build name $BUILD_NAME)"
 
   build-android:
     needs: version
-    if: needs.version.outputs.exists == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,7 +90,7 @@ jobs:
       - run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --build-name=${{ needs.version.outputs.build_name }} --build-number=${{ github.run_number }}
 
       - name: Rename APK
         run: |
@@ -90,7 +104,6 @@ jobs:
 
   build-ios:
     needs: version
-    if: needs.version.outputs.exists == 'false'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -120,7 +133,7 @@ jobs:
       - run: flutter pub get
 
       - name: Build iOS (no codesign)
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign --build-name=${{ needs.version.outputs.build_name }} --build-number=${{ github.run_number }}
 
       - name: Package unsigned IPA
         run: |
@@ -151,8 +164,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          target_commitish: ${{ github.sha }}
           name: ${{ needs.version.outputs.tag }}
+          prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
           generate_release_notes: true
           files: artifacts/*
 
@@ -165,7 +178,7 @@ jobs:
           DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.version.outputs.tag }}
-          FULL_VERSION: ${{ needs.version.outputs.full }}
+          VERSION: ${{ needs.version.outputs.version }}
           RELEASE_URL: ${{ needs.release.outputs.url }}
         run: |
           NOTES=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body | cut -c1-1000)
@@ -181,7 +194,7 @@ jobs:
             --arg title "New Release: $TAG" \
             --arg repo "$GITHUB_REPOSITORY" \
             --arg user "$GITHUB_ACTOR" \
-            --arg version "$FULL_VERSION" \
+            --arg version "$VERSION" \
             --arg notes "$NOTES" \
             --arg url "$RELEASE_URL" \
             --arg time "$(date -u)" \
