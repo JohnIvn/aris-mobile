@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/report_item.dart';
 import '../models/status.dart';
 import '../services/ar_service.dart';
-import '../services/mock_data_service.dart';
+import '../stores/report_stores.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
@@ -20,20 +20,41 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
+  final _store = ReportsStore();
+  final _scroll = ScrollController();
   final _searchController = TextEditingController();
   String _query = '';
-  PipelineStage? _filterStage; // null = All
+  int? _filterStage; // null = All, else backend stage 1-4
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+    if (_store.reports.isEmpty) _store.load();
+  }
 
   @override
   void dispose() {
+    _scroll.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onScroll() {
+    if (_scroll.position.extentAfter < 300) _store.loadMore();
+  }
+
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _store,
+      builder: (context, _) => _content(context),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final allReports = MockDataService().getReports();
+    final allReports = _store.reports;
 
     final reports = allReports.where((r) {
       final matchesQuery =
@@ -41,119 +62,188 @@ class _ReportsScreenState extends State<ReportsScreen> {
           r.periodLabel.toLowerCase().contains(_query) ||
           r.professorName.toLowerCase().contains(_query) ||
           r.professorId.toLowerCase().contains(_query);
-      final matchesFilter = _filterStage == null || r.stage == _filterStage;
+      final matchesFilter =
+          _filterStage == null || _store.stageOf(r) == _filterStage;
       return matchesQuery && matchesFilter;
     }).toList();
 
     return Container(
       color: colors.canvas,
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Reports',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
+      child: RefreshIndicator(
+        onRefresh: _store.load,
+        child: CustomScrollView(
+          controller: _scroll,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Reports',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (allReports.isNotEmpty) _summaryCard(colors, allReports),
-                  _searchField(
-                    colors,
-                    controller: _searchController,
-                    hint: 'Search by period or professor',
-                    onChanged: (v) =>
-                        setState(() => _query = v.trim().toLowerCase()),
-                    onClear: () => setState(() => _query = ''),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                    const SizedBox(height: 16),
+                    if (allReports.isNotEmpty) _summaryCard(colors, allReports),
+                    _searchField(
+                      colors,
+                      controller: _searchController,
+                      hint: 'Search by period or professor',
+                      onChanged: (v) =>
+                          setState(() => _query = v.trim().toLowerCase()),
+                      onClear: () => setState(() => _query = ''),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 38,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  _filterChip(
-                    colors,
-                    label: 'All',
-                    selected: _filterStage == null,
-                    onTap: () => setState(() => _filterStage = null),
-                  ),
-                  const SizedBox(width: 8),
-                  for (final stage in PipelineStage.values) ...[
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 38,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  children: [
                     _filterChip(
                       colors,
-                      label: stage.label,
-                      selected: _filterStage == stage,
-                      onTap: () => setState(() => _filterStage = stage),
+                      label: 'All',
+                      selected: _filterStage == null,
+                      onTap: () => setState(() => _filterStage = null),
                     ),
                     const SizedBox(width: 8),
+                    for (var n = 1; n <= 4; n++) ...[
+                      _filterChip(
+                        colors,
+                        label: ReportsStore.stageLabels[n - 1],
+                        selected: _filterStage == n,
+                        onTap: () => setState(() => _filterStage = n),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
-          if (reports.isEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Center(
-                  child: Text(
-                    'No reports match your search or filter.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: colors.textSecondary, fontSize: 13),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            if (reports.isEmpty)
+              SliverToBoxAdapter(child: _emptyState(colors, allReports.isEmpty))
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) => _reportCard(context, colors, reports[i]),
+                    childCount: reports.length,
                   ),
                 ),
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) => _reportCard(context, colors, reports[i]),
-                  childCount: reports.length,
-                ),
-              ),
-            ),
-        ],
+            SliverToBoxAdapter(child: _footer(colors, allReports.isNotEmpty)),
+          ],
+        ),
       ),
     );
   }
 
-  /// Summary of all reports (not just the filtered ones), based on the
-  /// AR verification progress of each report.
+  /// Spinner while a page loads, retry if a page failed.
+  Widget _footer(AppColors colors, bool hasData) {
+    if (_store.loadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+        ),
+      );
+    }
+    if (hasData && _store.error != null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          children: [
+            Text(
+              _store.error!,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.error, fontSize: 12.5),
+            ),
+            TextButton(
+              onPressed: _store.loadMore,
+              child: const Text('Try again'),
+            ),
+          ],
+        ),
+      );
+    }
+    return const SizedBox(height: 28);
+  }
+
+  Widget _emptyState(AppColors colors, bool noData) {
+    if (noData && _store.loading) {
+      return const Padding(
+        padding: EdgeInsets.all(48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (noData && _store.error != null) {
+      return Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Text(
+              'Could not load reports.\n${_store.error}',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.error, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: _store.load, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: Text(
+          noData
+              ? 'No reports yet.'
+              : 'No reports match your search or filter.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colors.textSecondary, fontSize: 13),
+        ),
+      ),
+    );
+  }
+
+  /// Summary of all loaded reports by backend stage
+  /// (pending, department, HR, accounting).
   Widget _summaryCard(AppColors colors, List<ReportItem> all) {
     final total = all.length;
-    final sums = all.map((r) => ArService().summarize(r)).toList();
-    final verified = sums.where((s) => s.percent == 100).length;
-    final needsAction = sums
-        .where((s) => s.percent < 100 && s.needsAction)
-        .length;
-    final inVerification = total - verified - needsAction;
-    final overall =
-        (sums.fold<int>(0, (a, s) => a + s.percent) / total).round();
+    final counts = List<int>.filled(4, 0);
+    for (final r in all) {
+      counts[_store.stageOf(r) - 1]++;
+    }
     String pct(int n) => '${(n * 100 / total).round()}%';
 
+    final dots = <Color>[
+      colors.textSecondary,
+      colors.warning,
+      colors.info,
+      colors.success,
+    ];
     final segments = <(int, Color)>[
-      (verified, colors.success),
-      (inVerification, colors.warning),
-      (needsAction, colors.error),
-    ].where((s) => s.$1 > 0).toList();
+      for (var i = 0; i < 4; i++)
+        if (counts[i] > 0) (counts[i], dots[i]),
+    ];
 
     return SectionCard(
       title: 'Report Summary',
@@ -178,53 +268,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 total == 1 ? 'report' : 'reports',
                 style: TextStyle(color: colors.textSecondary, fontSize: 14),
               ),
-              const Spacer(),
-              Text(
-                '$overall%',
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'verified',
-                style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
-              ),
             ],
           ),
           const SizedBox(height: 18),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _summaryStat(
-                  colors,
-                  'Verified',
-                  verified,
-                  pct(verified),
-                  colors.success,
+              for (var i = 0; i < 4; i++)
+                Expanded(
+                  child: _summaryStat(
+                    colors,
+                    ReportsStore.stageLabels[i],
+                    counts[i],
+                    pct(counts[i]),
+                    dots[i],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _summaryStat(
-                  colors,
-                  'In verification',
-                  inVerification,
-                  pct(inVerification),
-                  colors.warning,
-                ),
-              ),
-              Expanded(
-                child: _summaryStat(
-                  colors,
-                  'Needs action',
-                  needsAction,
-                  pct(needsAction),
-                  colors.error,
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -309,10 +368,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   ) {
     final isFocused = report.id == widget.focusedReportId;
     final s = ArService().summarize(report);
-    final attention = s.forResubmission + s.invalid + s.forwarded;
-    final attentionColor = (s.forResubmission + s.invalid) > 0
-        ? colors.error
-        : colors.textSecondary;
+    final stage = _store.stageOf(report);
 
     return SectionCard(
       padding: EdgeInsets.zero,
@@ -369,8 +425,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: StatusBadge(
-                        label: report.stage.label,
-                        kind: report.stage.colorKind,
+                        label: ReportsStore
+                            .stageLabels[_store.stageOf(report) - 1],
+                        kind: _store.stageOf(report) == 4
+                            ? StatusColorKind.success
+                            : StatusColorKind.info,
                       ),
                     ),
                   ],
@@ -382,7 +441,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       child: _stat(
                         colors,
                         'DTR hours',
-                        _hours(report.dtrTotalHours),
+                        _hours(report.dtrTally),
                       ),
                     ),
                     Expanded(child: _stat(colors, 'ARs', '${s.total}')),
@@ -393,7 +452,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 Row(
                   children: [
                     Text(
-                      'Verification',
+                      'Progress',
                       style: TextStyle(
                         color: colors.textSecondary,
                         fontSize: 12.5,
@@ -401,7 +460,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                     const Spacer(),
                     Text(
-                      '${s.percent}%',
+                      'Stage $stage of 4 · ${ReportsStore.stageLabels[stage - 1]}',
                       style: TextStyle(
                         color: colors.text,
                         fontSize: 13,
@@ -410,61 +469,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: LinearProgressIndicator(
-                    value: s.percent / 100,
-                    minHeight: 6,
-                    backgroundColor: colors.border.withValues(alpha: 0.5),
-                    valueColor: AlwaysStoppedAnimation(
-                      s.percent == 100 ? colors.success : colors.accentActive,
-                    ),
-                  ),
-                ),
-                if (attention > 0) ...[
-                  const SizedBox(height: 14),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: attentionColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          color: attentionColor,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            [
-                              if (s.forResubmission > 0)
-                                '${s.forResubmission} for resubmission',
-                              if (s.invalid > 0) '${s.invalid} invalid',
-                              if (s.forwarded > 0)
-                                '${s.forwarded} forwarded to next period',
-                            ].join(' · '),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: attentionColor,
-                              fontSize: 12.5,
-                              height: 1.35,
-                            ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (var n = 1; n <= 4; n++) ...[
+                      if (n > 1) const SizedBox(width: 4),
+                      Expanded(
+                        child: Container(
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: n <= stage
+                                ? (stage == 4
+                                      ? colors.success
+                                      : colors.accentActive)
+                                : colors.border.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(3),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ],
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),

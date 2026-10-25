@@ -20,7 +20,7 @@ class ReportItem {
   final String reportNarrative;
 
   /// Total Tally of DTR time for the period, in hours.
-  final double dtrTotalHours;
+  final double dtrTally;
 
   /// Total Tally of the ARs (accomplishments/tasks logged) for the period.
   final int arTaskTally;
@@ -43,11 +43,10 @@ class ReportItem {
     required this.position,
     required this.shiftDate,
     required this.reportNarrative,
-    required this.dtrTotalHours,
+    required this.dtrTally,
     required this.arTaskTally,
     required this.payrollStatus,
     this.payrollAvailableAt,
     this.payrollReceivedAt,
   });
 }
-

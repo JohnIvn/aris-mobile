@@ -66,57 +66,6 @@ class _ArListScreenState extends State<ArListScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          SectionCard(
-            title: 'Submission Batch',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      '${summary.percent}%',
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'verified',
-                      style: TextStyle(
-                        color: colors.textSecondary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: summary.percent / 100,
-                    minHeight: 8,
-                    backgroundColor: colors.border.withValues(alpha: 0.5),
-                    valueColor: AlwaysStoppedAnimation(
-                      summary.percent == 100
-                          ? colors.success
-                          : colors.accentActive,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '${summary.active} of ${summary.total} ARs are in this '
-                  'batch · ${summary.approved} approved',
-                  style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
-                ),
-              ],
-            ),
-          ),
           for (final g in groups)
             if (g.$3.isNotEmpty)
               SectionCard(
@@ -211,15 +160,40 @@ class _ArListScreenState extends State<ArListScreen> {
                       ),
                     ),
                     const SizedBox(height: 2),
+                    // Day and class date
                     Text(
-                      '${ar.day}, ${formatShortDate(ar.classDate)} · '
-                      '${ar.shiftStart}–${ar.shiftEnd}',
+                      '${ar.day}, ${formatShortDate(ar.classDate)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: colors.textSecondary,
                         fontSize: 12.5,
                       ),
+                    ),
+
+                    const SizedBox(height: 2),
+
+                    // Class period
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          size: 13,
+                          color: colors.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '${ar.shiftStart} – ${ar.shiftEnd}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     if (status.isActive) ...[
                       const SizedBox(height: 8),
@@ -241,12 +215,6 @@ class _ArListScreenState extends State<ArListScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              Flexible(
-                child: StatusBadge(
-                  label: ar.badgeLabel(now),
-                  kind: status.colorKind,
-                ),
-              ),
               Icon(Icons.chevron_right, color: colors.textSecondary),
             ],
           ),

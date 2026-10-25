@@ -141,30 +141,7 @@ class _ArDetailScreenState extends State<ArDetailScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
           if (!status.isActive) _attentionCard(colors, ar, status),
-          SectionCard(
-            title: 'Approval Stages',
-            action: StatusBadge(
-              label: ar.badgeLabel(now),
-              kind: status.colorKind,
-            ),
-            child: Column(
-              children: [
-                for (var i = 0; i < ar.approvals.length; i++) ...[
-                  if (i > 0)
-                    Divider(
-                      height: 24,
-                      thickness: 1,
-                      color: colors.border.withValues(alpha: 0.5),
-                    ),
-                  _approvalRow(
-                    colors,
-                    ar.approvals[i],
-                    identical(ar.currentApproval, ar.approvals[i]),
-                  ),
-                ],
-              ],
-            ),
-          ),
+          
           SectionCard(
             title: 'Class Details',
             child: Column(

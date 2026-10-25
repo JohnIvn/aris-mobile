@@ -24,10 +24,10 @@ class MockDataService {
         position: 'Part-time Instructor',
         shiftDate: DateTime(2026, 8, 27),
         reportNarrative:
-        'Conducted lecture and lab sessions for IT elective courses, '
+            'Conducted lecture and lab sessions for IT elective courses, '
             'consulted with 3 thesis groups, and finalized midterm exam '
             'materials for submission to the department.',
-        dtrTotalHours: 62.5,
+        dtrTally: 62.5,
         arTaskTally: 9,
         payrollStatus: PayrollStatus.notAvailable,
       ),
@@ -42,9 +42,9 @@ class MockDataService {
         position: 'Part-time Instructor',
         shiftDate: DateTime(2026, 8, 15),
         reportNarrative:
-        'Delivered scheduled lectures, proctored the first long exam, '
+            'Delivered scheduled lectures, proctored the first long exam, '
             'and submitted grade sheets for the previous grading period.',
-        dtrTotalHours: 64.0,
+        dtrTally: 64.0,
         arTaskTally: 11,
         payrollStatus: PayrollStatus.available,
         payrollAvailableAt: DateTime(2026, 8, 18),
@@ -55,7 +55,7 @@ class MockDataService {
         stage: PipelineStage.rejected,
         updatedAt: DateTime(2026, 8, 1),
         rejectionRemarks:
-        'DTR hours for Jul 22 do not match biometric logs. Please '
+            'DTR hours for Jul 22 do not match biometric logs. Please '
             'reconcile the discrepancy and resubmit.',
         professorName: 'Matthew D. Santos',
         professorId: 'PROF-00214',
@@ -63,9 +63,9 @@ class MockDataService {
         position: 'Part-time Instructor',
         shiftDate: DateTime(2026, 7, 31),
         reportNarrative:
-        'Held regular class sessions and consultation hours; assisted '
+            'Held regular class sessions and consultation hours; assisted '
             'in department accreditation document preparation.',
-        dtrTotalHours: 58.0,
+        dtrTally: 58.0,
         arTaskTally: 7,
         payrollStatus: PayrollStatus.notAvailable,
       ),
@@ -80,9 +80,9 @@ class MockDataService {
         position: 'Part-time Instructor',
         shiftDate: DateTime(2026, 7, 15),
         reportNarrative:
-        'Regular class sessions, department meeting attendance, and '
+            'Regular class sessions, department meeting attendance, and '
             'submission of the previous period\'s attendance corrections.',
-        dtrTotalHours: 60.0,
+        dtrTally: 60.0,
         arTaskTally: 8,
         payrollStatus: PayrollStatus.received,
         payrollAvailableAt: DateTime(2026, 7, 18),

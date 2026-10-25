@@ -58,7 +58,7 @@ class HomeScreen extends StatelessWidget {
                       child: _stat(
                         colors,
                         'DTR hours',
-                        _hours(latest.dtrTotalHours),
+                        _hours(latest.dtrTally),
                       ),
                     ),
                     Expanded(
@@ -342,8 +342,18 @@ class HomeScreen extends StatelessWidget {
   String _formattedToday() {
     final now = DateTime.now();
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${months[now.month - 1]} ${now.day}, ${now.year}';
   }

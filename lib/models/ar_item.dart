@@ -134,14 +134,6 @@ class ArItem {
     return ArStatus.inReview;
   }
 
-  String badgeLabel(DateTime now) => switch (statusAt(now)) {
-    ArStatus.inReview => 'In review · ${currentApproval?.stage.label ?? ''}',
-    ArStatus.approved => 'Approved',
-    ArStatus.forResubmission => 'For resubmission',
-    ArStatus.invalid => 'Invalid',
-    ArStatus.forwarded => 'Forwarded',
-  };
-
   /// Cutoff of the submission period after the one this AR missed / was removed from.
   DateTime get nextPeriodCutoff => semiMonthlyCutoff(
     (resubmitBy ?? semiMonthlyCutoff(submittedAt)).add(const Duration(days: 1)),

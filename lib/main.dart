@@ -11,9 +11,13 @@ import 'theme/theme_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import './stores/report_stores.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  final authService = AuthService();
+  ReportsStore().auth = authService;
+  await authService.restoreSession();
   await dotenv.load(fileName: '.env');
   runApp(const ArisApp());
 }

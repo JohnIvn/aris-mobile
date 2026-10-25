@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/report_item.dart';
 import '../models/status.dart';
 import '../services/ar_service.dart';
+import '../stores/report_stores.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
@@ -30,7 +31,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final s = ArService().summarize(report);
+    final arCount = ArService().forReport(report).length;
+    final stage = ReportsStore().stageOf(report);
 
     return Scaffold(
       backgroundColor: colors.canvas,
@@ -49,9 +51,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          _progressCard(colors, s),
-          if (s.forResubmission + s.invalid + s.forwarded > 0)
-            _attentionCard(colors, s),
+          _progressCard(colors, stage),
           SectionCard(
             title: 'Tally',
             child: Row(
@@ -60,7 +60,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   child: _tallyStat(
                     colors,
                     label: 'DTR Time (Biometrics)',
-                    value: '${report.dtrTotalHours.toStringAsFixed(1)} hrs',
+                    value: '${report.dtrTally.toStringAsFixed(1)} hrs',
                   ),
                 ),
                 Container(
@@ -69,7 +69,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   color: colors.border.withValues(alpha: 0.6),
                 ),
                 const SizedBox(width: 20),
-                Expanded(child: _arsButton(colors, s.total)),
+                Expanded(child: _arsButton(colors, arCount)),
               ],
             ),
           ),
@@ -144,154 +144,73 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     );
   }
 
-  /// AR verification percentage across the ARs still in the batch, with a
-  /// breakdown of every AR by state.
-  Widget _progressCard(AppColors colors, ArSummary s) {
+  /// Report progress through the four backend stages
+  /// (pending, department, HR, accounting).
+  Widget _progressCard(AppColors colors, int stage) {
+    final done = stage == 4;
+    final active = done ? colors.success : colors.accentActive;
+
     return SectionCard(
       title: 'Progress',
       action: StatusBadge(
-        label: '${s.percent}% verified',
-        kind: s.percent == 100 ? StatusColorKind.success : StatusColorKind.info,
+        label: ReportsStore.stageLabels[stage - 1],
+        kind: done ? StatusColorKind.success : StatusColorKind.info,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: s.percent / 100,
-              minHeight: 8,
-              backgroundColor: colors.border.withValues(alpha: 0.5),
-              valueColor: AlwaysStoppedAnimation(
-                s.percent == 100 ? colors.success : colors.accentActive,
-              ),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var n = 1; n <= 4; n++) ...[
+                if (n > 1) const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: n <= stage
+                              ? active
+                              : colors.border.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        ReportsStore.stageLabels[n - 1],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: n == stage
+                              ? colors.text
+                              : colors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: n == stage
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
-            '${s.active} of ${s.total} ARs in this batch',
+            'Stage $stage of 4',
             style: TextStyle(
               color: colors.text,
               fontSize: 13.5,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 16,
-            runSpacing: 8,
-            children: [
-              _legend(colors, 'Approved', s.approved, colors.success),
-              _legend(colors, 'In review', s.inReview, colors.info),
-              _legend(
-                colors,
-                'For resubmission',
-                s.forResubmission,
-                colors.error,
-              ),
-              _legend(colors, 'Invalid', s.invalid, colors.error),
-              _legend(colors, 'Forwarded', s.forwarded, colors.textSecondary),
-            ],
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
           Text(
             'Updated ${_formatDate(report.updatedAt)}',
             style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _legend(AppColors colors, String label, int count, Color dot) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          '$count $label',
-          style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
-        ),
-      ],
-    );
-  }
-
-  /// Replaces the old rejection-remarks card: surfaces ARs needing action.
-  Widget _attentionCard(AppColors colors, ArSummary s) {
-    final urgent = s.forResubmission + s.invalid > 0;
-    final color = urgent ? colors.error : colors.textSecondary;
-    final lines = [
-      if (s.forResubmission > 0)
-        '${s.forResubmission} AR${s.forResubmission == 1 ? '' : 's'} '
-            'rejected, awaiting resubmission',
-      if (s.invalid > 0) '${s.invalid} invalid (removed from this batch)',
-      if (s.forwarded > 0)
-        '${s.forwarded} missed the cutoff and moved to the next period',
-    ];
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.error_outline, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ARs Need Attention',
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                for (final l in lines)
-                  Text(
-                    l,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 13.5,
-                      height: 1.45,
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: _openArs,
-                  child: Text(
-                    'Review ARs',
-                    style: TextStyle(
-                      color: colors.accentActive,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
