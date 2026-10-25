@@ -1,0 +1,204 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [pubspec.yaml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.v.outputs.name }}
+      full: ${{ steps.v.outputs.full }}
+      tag: ${{ steps.v.outputs.tag }}
+      exists: ${{ steps.v.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from pubspec.yaml
+        id: v
+        run: |
+          FULL=$(grep -m1 '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//' | tr -d '\r[:space:]')
+          NAME=${FULL%%+*}
+          TAG="v$NAME"
+
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
+            EXISTS=true
+          else
+            EXISTS=false
+          fi
+
+          echo "full=$FULL" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "exists=$EXISTS" >> $GITHUB_OUTPUT
+          echo "Version: $FULL | Tag: $TAG | Already released: $EXISTS"
+
+  build-android:
+    needs: version
+    if: needs.version.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create .env
+        env:
+          SERVER_URL: ${{ secrets.SERVER_URL }}
+          ANDROID_GOOGLE_CLIENT_ID: ${{ secrets.ANDROID_GOOGLE_CLIENT_ID }}
+          IOS_GOOGLE_CLIENT_ID: ${{ secrets.IOS_GOOGLE_CLIENT_ID }}
+          WEB_GOOGLE_CLIENT_ID: ${{ secrets.WEB_GOOGLE_CLIENT_ID }}
+          WEB_GOOGLE_CLIENT_ID_SECRET: ${{ secrets.WEB_GOOGLE_CLIENT_ID_SECRET }}
+        run: |
+          {
+            printf 'SERVER_URL=%s\n' "$SERVER_URL"
+            printf 'ANDROID_GOOGLE_CLIENT_ID=%s\n' "$ANDROID_GOOGLE_CLIENT_ID"
+            printf 'IOS_GOOGLE_CLIENT_ID=%s\n' "$IOS_GOOGLE_CLIENT_ID"
+            printf 'WEB_GOOGLE_CLIENT_ID=%s\n' "$WEB_GOOGLE_CLIENT_ID"
+            printf 'WEB_GOOGLE_CLIENT_ID_SECRET=%s\n' "$WEB_GOOGLE_CLIENT_ID_SECRET"
+            printf 'MODE=production\n'
+          } > .env
+
+      - run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/app-${{ needs.version.outputs.tag }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/*.apk
+
+  build-ios:
+    needs: version
+    if: needs.version.outputs.exists == 'false'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create .env
+        env:
+          SERVER_URL: ${{ secrets.SERVER_URL }}
+          ANDROID_GOOGLE_CLIENT_ID: ${{ secrets.ANDROID_GOOGLE_CLIENT_ID }}
+          IOS_GOOGLE_CLIENT_ID: ${{ secrets.IOS_GOOGLE_CLIENT_ID }}
+          WEB_GOOGLE_CLIENT_ID: ${{ secrets.WEB_GOOGLE_CLIENT_ID }}
+          WEB_GOOGLE_CLIENT_ID_SECRET: ${{ secrets.WEB_GOOGLE_CLIENT_ID_SECRET }}
+        run: |
+          {
+            printf 'SERVER_URL=%s\n' "$SERVER_URL"
+            printf 'ANDROID_GOOGLE_CLIENT_ID=%s\n' "$ANDROID_GOOGLE_CLIENT_ID"
+            printf 'IOS_GOOGLE_CLIENT_ID=%s\n' "$IOS_GOOGLE_CLIENT_ID"
+            printf 'WEB_GOOGLE_CLIENT_ID=%s\n' "$WEB_GOOGLE_CLIENT_ID"
+            printf 'WEB_GOOGLE_CLIENT_ID_SECRET=%s\n' "$WEB_GOOGLE_CLIENT_ID_SECRET"
+            printf 'MODE=production\n'
+          } > .env
+
+      - run: flutter pub get
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p dist/Payload
+          cp -R build/ios/iphoneos/Runner.app dist/Payload/
+          cd dist
+          zip -qr "app-${{ needs.version.outputs.tag }}.ipa" Payload
+          rm -rf Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: dist/*.ipa
+
+  release:
+    needs: [version, build-android, build-ios]
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.rel.outputs.url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        id: rel
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.version.outputs.tag }}
+          generate_release_notes: true
+          files: artifacts/*
+
+  notify:
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord release message
+        env:
+          DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          FULL_VERSION: ${{ needs.version.outputs.full }}
+          RELEASE_URL: ${{ needs.release.outputs.url }}
+        run: |
+          NOTES=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body | cut -c1-1000)
+          [ -z "$NOTES" ] && NOTES="No notes."
+
+          case "$GITHUB_REPOSITORY" in
+            *aris-app*) COLOR=16711680;;
+            *aris-vista*) COLOR=65280;;
+            *) COLOR=255;;
+          esac
+
+          JSON=$(jq -n \
+            --arg title "New Release: $TAG" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg user "$GITHUB_ACTOR" \
+            --arg version "$FULL_VERSION" \
+            --arg notes "$NOTES" \
+            --arg url "$RELEASE_URL" \
+            --arg time "$(date -u)" \
+            --argjson color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                color: $color,
+                fields: [
+                  { name: "Repository", value: $repo, inline: true },
+                  { name: "User", value: $user, inline: true },
+                  { name: "Version", value: $version, inline: true },
+                  { name: "Release Notes", value: $notes, inline: false },
+                  { name: "Release URL", value: $url, inline: false },
+                  { name: "Time", value: $time, inline: false }
+                ]
+              }]
+            }')
+
+          curl -H "Content-Type: application/json" -d "$JSON" "$DISCORD_RELEASE_WEBHOOK"
