@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../models/status.dart';
 import '../services/auth_scope.dart';
-import '../services/mock_data_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
@@ -32,7 +31,7 @@ class ProfileScreen extends StatelessWidget {
     final user = auth.user;
     final raw = user?.raw ?? const <String, dynamic>{};
 
-    final name = user?.name ?? MockDataService.currentUserName;
+    final name = user?.name ?? '';
     final email = user?.email;
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
     final avatarUrl = user?.avatarUrl;
@@ -90,7 +89,7 @@ class ProfileScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        name,
+                        _s(name),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -122,7 +121,7 @@ class ProfileScreen extends StatelessWidget {
             child: _infoRows(
               colors,
               [
-                ('Name', name),
+                ('Name', _s(name)),
                 ('Middle name', _s(raw['middlename'])),
                 ('Username', _s(user?.username)),
                 ('Role', _cap(user?.role ?? '')),

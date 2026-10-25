@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/auth_scope.dart';
 import '../services/mock_data_service.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/app_bottom_nav.dart';
@@ -50,7 +51,7 @@ class _RootShellState extends State<RootShell> {
     final unread = notifications
         .where((n) => !_seenNotificationIds.contains(n.id))
         .length;
-    final name = MockDataService.currentUserName;
+    final name = AuthScope.of(context).user?.name ?? '';
 
     final screens = [
       HomeScreen(onSeeReports: goToReports, onSeePayroll: goToPayroll),

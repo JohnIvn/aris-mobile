@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/dtr_entry.dart';
+import '../models/report_item.dart';
 import '../models/status.dart';
-import '../services/mock_data_service.dart';
+import '../stores/report_stores.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
@@ -16,19 +17,16 @@ class DtrScreen extends StatefulWidget {
 }
 
 class _DtrScreenState extends State<DtrScreen> {
+  final _store = ReportsStore();
   final _searchController = TextEditingController();
   String _query = '';
   DtrDayStatus? _filterStatus; // null = All
 
-  /// Happy-path order of the pipeline. `rejected` is not a step.
-  static const _steps = [
-    PipelineStage.draft,
-    PipelineStage.submitted,
-    PipelineStage.department,
-    PipelineStage.hr,
-    PipelineStage.accounting,
-    PipelineStage.completed,
-  ];
+  @override
+  void initState() {
+    super.initState();
+    if (_store.reports.isEmpty) _store.load();
+  }
 
   @override
   void dispose() {
@@ -38,10 +36,24 @@ class _DtrScreenState extends State<DtrScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _store,
+      builder: (context, _) => _content(context),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final data = MockDataService();
-    final allEntries = data.getDtrEntries();
-    final overallStage = data.getDtrOverallStage();
+
+    // The DTR tab shows the latest report (the backend sorts newest first).
+    final ReportItem? report = _store.reports.isEmpty
+        ? null
+        : _store.reports.first;
+
+    final allEntries = report == null
+        ? const <DtrEntry>[]
+        : _store.dtrEntriesOf(report);
+    final stage = report == null ? 1 : _store.stageOf(report);
 
     // Attendance summary always reflects the full period, regardless
     // of what the search/filter is currently narrowing the list to.
@@ -65,142 +77,192 @@ class _DtrScreenState extends State<DtrScreen> {
 
     return Container(
       color: colors.canvas,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-        children: [
-          Text(
-            'DTR',
-            style: TextStyle(
-              color: colors.text,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
+      child: RefreshIndicator(
+        onRefresh: _store.load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          children: [
+            Text(
+              'DTR',
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            MockDataService.currentPayrollPeriod,
-            style: TextStyle(color: colors.textSecondary, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          _statusCard(colors, overallStage),
-          _summaryCard(
-            colors,
-            total: allEntries.length,
-            present: present,
-            late: late,
-            absent: absent,
-            missing: missing,
-          ),
-          _searchField(
-            colors,
-            controller: _searchController,
-            hint: 'Search by date (e.g. Aug 17)',
-            onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
-            onClear: () => setState(() => _query = ''),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 38,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _filterChip(
-                  colors,
-                  label: 'All',
-                  selected: _filterStatus == null,
-                  onTap: () => setState(() => _filterStatus = null),
-                ),
-                const SizedBox(width: 8),
-                for (final status in DtrDayStatus.values) ...[
-                  _filterChip(
-                    colors,
-                    label: _statusLabel(status),
-                    selected: _filterStatus == status,
-                    onTap: () => setState(() => _filterStatus = status),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          SectionCard(
-            title: 'Daily Records',
-            child: entries.isEmpty
-                ? Text(
-                    'No DTR entries match your search or filter.',
-                    style: TextStyle(color: colors.textSecondary, fontSize: 13),
-                  )
-                : Column(
-                    children: [
-                      for (var i = 0; i < entries.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 8),
-                        _entryRow(colors, entries[i]),
-                      ],
+            if (report != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                report.periodLabel,
+                style: TextStyle(color: colors.textSecondary, fontSize: 13),
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (report == null)
+              _emptyReport(colors)
+            else ...[
+              _statusCard(colors, stage),
+              _summaryCard(
+                colors,
+                total: allEntries.length,
+                present: present,
+                late: late,
+                absent: absent,
+                missing: missing,
+              ),
+              _searchField(
+                colors,
+                controller: _searchController,
+                hint: 'Search by date (e.g. Nov 2)',
+                onChanged: (v) =>
+                    setState(() => _query = v.trim().toLowerCase()),
+                onClear: () => setState(() => _query = ''),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 38,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _filterChip(
+                      colors,
+                      label: 'All',
+                      selected: _filterStatus == null,
+                      onTap: () => setState(() => _filterStatus = null),
+                    ),
+                    const SizedBox(width: 8),
+                    for (final status in DtrDayStatus.values) ...[
+                      _filterChip(
+                        colors,
+                        label: _statusLabel(status),
+                        selected: _filterStatus == status,
+                        onTap: () => setState(() => _filterStatus = status),
+                      ),
+                      const SizedBox(width: 8),
                     ],
-                  ),
-          ),
-          Text(
-            'Records are sourced from biometrics and cannot be edited '
-            'directly. Tap an entry to report a discrepancy.',
-            style: TextStyle(
-              color: colors.textSecondary,
-              fontSize: 12.5,
-              height: 1.4,
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SectionCard(
+                title: 'Daily Records',
+                child: entries.isEmpty
+                    ? Text(
+                        allEntries.isEmpty
+                            ? 'No DTR entries for this period yet.'
+                            : 'No DTR entries match your search or filter.',
+                        style: TextStyle(
+                          color: colors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          for (var i = 0; i < entries.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 8),
+                            _entryRow(colors, entries[i]),
+                          ],
+                        ],
+                      ),
+              ),
+              Text(
+                'Records are sourced from biometrics and cannot be edited '
+                'directly. Tap an entry to report a discrepancy.',
+                style: TextStyle(
+                  color: colors.textSecondary,
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyReport(AppColors colors) {
+    if (_store.loading) {
+      return const Padding(
+        padding: EdgeInsets.all(48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_store.error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          children: [
+            Text(
+              'Could not load DTR.\n${_store.error}',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.error, fontSize: 13),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: _store.load, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Text(
+          'No reports yet.',
+          style: TextStyle(color: colors.textSecondary, fontSize: 13),
+        ),
       ),
     );
   }
 
   // ---- Cards ------------------------------------------------------------
 
-  Widget _statusCard(AppColors colors, PipelineStage stage) {
-    final current = _steps.indexOf(stage);
-    final fill = _kindColor(colors, stage.colorKind);
+  /// The report's backend stage (pending, department, HR, accounting).
+  Widget _statusCard(AppColors colors, int stage) {
+    final done = stage == 4;
+    final kind = done ? StatusColorKind.success : StatusColorKind.info;
+    final fill = _kindColor(colors, kind);
 
     return SectionCard(
       title: 'DTR Status',
-      action: StatusBadge(label: stage.label, kind: stage.colorKind),
-      child: current >= 0
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    for (var i = 0; i < _steps.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 4),
-                      Expanded(
-                        child: Container(
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: i <= current
-                                ? fill
-                                : colors.border.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Step ${current + 1} of ${_steps.length}',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
+      action: StatusBadge(
+        label: ReportsStore.stageLabels[stage - 1],
+        kind: kind,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              for (var n = 1; n <= 4; n++) ...[
+                if (n > 1) const SizedBox(width: 4),
+                Expanded(
+                  child: Container(
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: n <= stage
+                          ? fill
+                          : colors.border.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
                 ),
               ],
-            )
-          : Text(
-              'Resubmit your corrected AR & DTR.',
-              style: TextStyle(color: colors.textSecondary, fontSize: 13.5),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Stage $stage of 4',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
             ),
+          ),
+        ],
+      ),
     );
   }
 
