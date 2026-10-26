@@ -157,7 +157,7 @@ class AuthService extends ChangeNotifier {
       if (e.statusCode == 404) {
         _needsSignUp = true;
         debugPrint('[OAuth] Account not found. Sign-up required.');
-      } else if (!e.cancelled) {
+      } else {
         _error = e.message;
       }
     } catch (e, st) {
