@@ -25,7 +25,7 @@ class ReportsStore extends ChangeNotifier {
   /// AR-AP-STG-1..4
   static const stageLabels = ['Pending', 'Department', 'HR', 'Accounting'];
 
-  /// Set once, where the app creates its [AuthService]:
+  /// Set once, before runApp, with the SAME instance that signs in:
   /// `ReportsStore().auth = authService;`
   AuthService? auth;
 
@@ -81,8 +81,17 @@ class ReportsStore extends ChangeNotifier {
       if (base == null || base.isEmpty) {
         throw StateError('SERVER_URL is not set in .env');
       }
-      final token = auth?.token;
-      if (token == null) throw StateError('Not signed in');
+
+      final a = auth;
+      if (a == null) {
+        throw StateError('ReportsStore.auth was never set (wiring issue)');
+      }
+      final token = a.token;
+      if (token == null || token.isEmpty) {
+        throw StateError(
+          'Not signed in (auth status: ${a.status.name}, user: ${a.user != null})',
+        );
+      }
 
       final uri =
           Uri.parse('${base.replaceAll(RegExp(r'/+$'), '')}/reports/mobile')
@@ -104,7 +113,7 @@ class ReportsStore extends ChangeNotifier {
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 401) {
-        await auth?.signOut();
+        await a.signOut();
         throw Exception('Session expired. Please sign in again.');
       }
       if (res.statusCode != 200) {

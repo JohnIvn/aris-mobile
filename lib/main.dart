@@ -15,15 +15,19 @@ import './stores/report_stores.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: '.env');
+
   final authService = AuthService();
   ReportsStore().auth = authService;
   await authService.restoreSession();
-  await dotenv.load(fileName: '.env');
-  runApp(const ArisApp());
+
+  runApp(ArisApp(auth: authService));
 }
 
 class ArisApp extends StatefulWidget {
-  const ArisApp({super.key});
+  const ArisApp({super.key, required this.auth});
+
+  final AuthService auth;
 
   @override
   State<ArisApp> createState() => _ArisAppState();
@@ -31,7 +35,8 @@ class ArisApp extends StatefulWidget {
 
 class _ArisAppState extends State<ArisApp> {
   final ThemeService _themeService = ThemeService();
-  final AuthService _authService = AuthService();
+
+  AuthService get _authService => widget.auth;
 
   @override
   Widget build(BuildContext context) {
