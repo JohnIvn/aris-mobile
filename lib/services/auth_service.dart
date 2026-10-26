@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum AuthStatus { unauthenticated, authenticating, authenticated }
 
@@ -79,6 +80,7 @@ class AuthService extends ChangeNotifier {
 
   static const _tokenKey = 'auth_token';
   static const _userKey = 'auth_user';
+  static const _installFlagKey = 'has_run_before';
 
   final _storage = const FlutterSecureStorage();
   Future<void>? _googleInit;
@@ -105,6 +107,15 @@ class AuthService extends ChangeNotifier {
 
   /// Call once at app start, before showing the login screen.
   Future<void> restoreSession() async {
+    // Secure storage can outlive an uninstall (iOS Keychain, Android backup).
+    // SharedPreferences does not, so a missing flag means a fresh install:
+    // wipe any leftover session.
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_installFlagKey) != true) {
+      await _storage.deleteAll();
+      await prefs.setBool(_installFlagKey, true);
+    }
+
     final token = await _storage.read(key: _tokenKey);
     final raw = await _storage.read(key: _userKey);
 
@@ -157,7 +168,7 @@ class AuthService extends ChangeNotifier {
       if (e.statusCode == 404) {
         _needsSignUp = true;
         debugPrint('[OAuth] Account not found. Sign-up required.');
-      } else {
+      } else if (!e.cancelled) {
         _error = e.message;
       }
     } catch (e, st) {
@@ -348,8 +359,7 @@ class AuthService extends ChangeNotifier {
     _needsSignUp = false;
     _pendingIdToken = null;
     _status = AuthStatus.unauthenticated;
-    await _storage.delete(key: _tokenKey);
-    await _storage.delete(key: _userKey);
+    await _storage.deleteAll();
   }
 
   bool _isExpired(String token) {
