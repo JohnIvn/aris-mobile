@@ -139,14 +139,14 @@ class ProfileScreen extends StatelessWidget {
               wrappable: const {'Department'},
             ),
           ),
-          SectionCard(
-            title: 'Employment Information',
-            child: _infoRows(colors, [
-              ('Salary type', '—'),
-              ('Shift', '—'),
-              ('Employment status', '—'),
-            ]),
-          ),
+          // SectionCard(
+          //   title: 'Employment Information',
+          //   child: _infoRows(colors, [
+          //     ('Salary type', '—'),
+          //     ('Shift', '—'),
+          //     ('Employment status', '—'),
+          //   ]),
+          // ),
           SectionCard(
             title: 'Preferences',
             child: _navRow(

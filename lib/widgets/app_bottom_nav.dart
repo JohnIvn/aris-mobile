@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../theme/theme_scope.dart';
 
-
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
   final int unreadCount;
 
-  /// Letter shown in the profile avatar.
+  /// Letter shown in the profile avatar when there is no [profileAvatarUrl]
+  /// (or it fails to load).
   final String profileInitial;
+
+  /// Optional profile picture URL shown in the profile slot.
+  final String? profileAvatarUrl;
 
   const AppBottomNav({
     super.key,
@@ -18,17 +21,14 @@ class AppBottomNav extends StatelessWidget {
     required this.onTap,
     this.unreadCount = 0,
     this.profileInitial = '?',
+    this.profileAvatarUrl,
   });
 
   static const _notificationsIndex = 4;
   static const _profileIndex = 5;
 
   static const _items = [
-    (
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home_rounded,
-      label: 'Home',
-    ),
+    (icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
     (
       icon: Icons.description_outlined,
       activeIcon: Icons.description_rounded,
@@ -59,6 +59,17 @@ class AppBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
+    final avatarUrl = profileAvatarUrl;
+    final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
+
+    final initialAvatar = Text(
+      profileInitial,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+      ),
+    );
 
     // Transparent wrapper: the bar floats over the scaffold background.
     return SafeArea(
@@ -90,8 +101,9 @@ class AppBottomNav extends StatelessWidget {
                   ? '${item.label}, $unreadCount unread'
                   : item.label;
 
-              final Color iconColor =
-                  selected ? colors.accentActive : colors.text;
+              final Color iconColor = selected
+                  ? colors.accentActive
+                  : colors.text;
 
               Widget content;
               if (i == _profileIndex) {
@@ -109,14 +121,17 @@ class AppBottomNav extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: colors.accentActive,
                     ),
-                    child: Text(
-                      profileInitial,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    child: hasAvatar
+                        ? ClipOval(
+                            child: Image.network(
+                              avatarUrl,
+                              width: 24,
+                              height: 24,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => initialAvatar,
+                            ),
+                          )
+                        : initialAvatar,
                   ),
                 );
               } else {
