@@ -77,6 +77,10 @@ jobs:
           IOS_GOOGLE_CLIENT_ID: ${{ secrets.IOS_GOOGLE_CLIENT_ID }}
           WEB_GOOGLE_CLIENT_ID: ${{ secrets.WEB_GOOGLE_CLIENT_ID }}
           WEB_GOOGLE_CLIENT_ID_SECRET: ${{ secrets.WEB_GOOGLE_CLIENT_ID_SECRET }}
+          # GITHUB_* names are reserved, so pass under other names
+          # and write them to .env as GITHUB_USERNAME / GITHUB_REPOSITORY.
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
         run: |
           {
             printf 'SERVER_URL=%s\n' "$SERVER_URL"
@@ -84,6 +88,8 @@ jobs:
             printf 'IOS_GOOGLE_CLIENT_ID=%s\n' "$IOS_GOOGLE_CLIENT_ID"
             printf 'WEB_GOOGLE_CLIENT_ID=%s\n' "$WEB_GOOGLE_CLIENT_ID"
             printf 'WEB_GOOGLE_CLIENT_ID_SECRET=%s\n' "$WEB_GOOGLE_CLIENT_ID_SECRET"
+            printf 'GITHUB_USERNAME=%s\n' "$REPO_OWNER"
+            printf 'GITHUB_REPOSITORY=%s\n' "$REPO_NAME"
             printf 'MODE=production\n'
           } > .env
 
