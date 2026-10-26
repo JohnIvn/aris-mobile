@@ -66,6 +66,79 @@ class ReportsStore extends ChangeNotifier {
     return _fetch(reset: false);
   }
 
+  /// `PATCH {SERVER_URL}/reports/mobile/payroll?report_id=<id>`
+  /// Marks the report's payroll as received. Throws on failure.
+  Future<void> markPayrollReceived(String reportId) async {
+    final base = dotenv.env['SERVER_URL'];
+    if (base == null || base.isEmpty) {
+      throw StateError('SERVER_URL is not set in .env');
+    }
+    final a = auth;
+    final token = a?.token;
+    if (a == null || token == null || token.isEmpty) {
+      throw Exception('Not signed in.');
+    }
+
+    final uri = Uri.parse(
+      '${base.replaceAll(RegExp(r'/+$'), '')}/reports/mobile/payroll',
+    ).replace(queryParameters: {'report_id': reportId});
+
+    final res = await http
+        .patch(
+          uri,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (res.statusCode == 401) {
+      await a.signOut();
+      throw Exception('Session expired. Please sign in again.');
+    }
+
+    Object? body;
+    try {
+      body = jsonDecode(res.body);
+    } catch (_) {}
+
+    final failed =
+        body is Map && (body['ok'] == false || body['status'] == 'failure');
+    if (res.statusCode >= 300 || failed) {
+      final msg = body is Map
+          ? (body['error'] ?? body['message'] ?? 'unknown')
+          : 'status ${res.statusCode}';
+      throw Exception('Could not update payroll: $msg');
+    }
+
+    // Patch locally so the UI updates without refetching pages.
+    final i = _reports.indexWhere((r) => r.id == reportId);
+    if (i != -1) {
+      final r = _reports[i];
+      _reports = [..._reports]
+        ..[i] = ReportItem(
+          id: r.id,
+          periodLabel: r.periodLabel,
+          stage: r.stage,
+          updatedAt: r.updatedAt,
+          rejectionRemarks: r.rejectionRemarks,
+          professorName: r.professorName,
+          professorId: r.professorId,
+          department: r.department,
+          position: r.position,
+          shiftDate: r.shiftDate,
+          reportNarrative: r.reportNarrative,
+          dtrTally: r.dtrTally,
+          arTaskTally: r.arTaskTally,
+          payrollStatus: PayrollStatus.received,
+          payrollAvailableAt: r.payrollAvailableAt,
+          payrollReceivedAt: r.payrollReceivedAt,
+        );
+      notifyListeners();
+    }
+  }
+
   Future<void> _fetch({required bool reset}) async {
     if (_loading || _loadingMore) return;
     if (reset) {
@@ -297,6 +370,13 @@ class ReportsStore extends ChangeNotifier {
         ? updatedAt
         : ars.map((a) => a.classDate).reduce((a, b) => a.isBefore(b) ? a : b);
 
+    // received wins over available; neither means not available yet.
+    final payrollStatus = _b(j['payroll_received'])
+        ? PayrollStatus.received
+        : _b(j['payroll_availability'])
+        ? PayrollStatus.available
+        : PayrollStatus.notAvailable;
+
     return ReportItem(
       id: id,
       periodLabel: _s(j['periodLabel']),
@@ -310,11 +390,7 @@ class ReportsStore extends ChangeNotifier {
       reportNarrative: _s(j['remarks']),
       dtrTally: dtrHours,
       arTaskTally: ars.length,
-      // The backend only says whether payroll is available; there is no
-      // "received" signal yet.
-      payrollStatus: _b(j['payroll_availability'])
-          ? PayrollStatus.available
-          : PayrollStatus.notAvailable,
+      payrollStatus: payrollStatus,
     );
   }
 }

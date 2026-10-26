@@ -20,7 +20,11 @@ class ReportDetailScreen extends StatefulWidget {
 }
 
 class _ReportDetailScreenState extends State<ReportDetailScreen> {
-  ReportItem get report => widget.report;
+  bool _submitting = false;
+
+  /// Latest version from the store (falls back to the one passed in).
+  ReportItem get report =>
+      ReportsStore().byId(widget.report.id) ?? widget.report;
 
   Future<void> _openArs() async {
     await Navigator.of(context)
@@ -28,11 +32,55 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     if (mounted) setState(() {}); // AR states may have changed
   }
 
+  Future<void> _confirmReceived() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm payroll received'),
+        content: const Text(
+          'This marks the report as fully completed and can\'t be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _submitting = true);
+    try {
+      await ReportsStore().markPayrollReceived(report.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: ReportsStore(),
+      builder: (context, _) => _content(context),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final arCount = ArService().forReport(report).length;
-    final stage = ReportsStore().stageOf(report);
+    final r = report;
+    final arCount = ArService().forReport(r).length;
+    final stage = ReportsStore().stageOf(r);
 
     return Scaffold(
       backgroundColor: colors.canvas,
@@ -44,14 +92,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         scrolledUnderElevation: 0,
         centerTitle: false,
         title: Text(
-          report.periodLabel,
+          r.periodLabel,
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          _progressCard(colors, stage),
+          _progressCard(colors, r, stage),
           SectionCard(
             title: 'Tally',
             child: Row(
@@ -60,7 +108,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   child: _tallyStat(
                     colors,
                     label: 'DTR Time (Biometrics)',
-                    value: '${report.dtrTally.toStringAsFixed(1)} hrs',
+                    value: '${r.dtrTally.toStringAsFixed(1)} hrs',
                   ),
                 ),
                 Container(
@@ -91,26 +139,26 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                       ),
                       Flexible(
                         child: StatusBadge(
-                          label: report.payrollStatus.label,
-                          kind: report.payrollStatus.colorKind,
+                          label: r.payrollStatus.label,
+                          kind: r.payrollStatus.colorKind,
                         ),
                       ),
                     ],
                   ),
-                  if (report.payrollAvailableAt != null)
+                  if (r.payrollAvailableAt != null)
                     _detailRow(
                       colors,
                       'Available Since',
-                      _formatDate(report.payrollAvailableAt!),
+                      _formatDate(r.payrollAvailableAt!),
                     ),
-                  if (report.payrollReceivedAt != null)
+                  if (r.payrollReceivedAt != null)
                     _detailRow(
                       colors,
                       'Received On',
-                      _formatDate(report.payrollReceivedAt!),
+                      _formatDate(r.payrollReceivedAt!),
                     ),
                 ]),
-                if (report.payrollStatus == PayrollStatus.notAvailable) ...[
+                if (r.payrollStatus == PayrollStatus.notAvailable) ...[
                   const SizedBox(height: 14),
                   Text(
                     'Payroll unlocks once Department, HR, and Accounting '
@@ -122,21 +170,51 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                     ),
                   ),
                 ],
+                if (r.payrollStatus == PayrollStatus.available) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _submitting ? null : _confirmReceived,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.accentActive,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: _submitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_circle_outline, size: 20),
+                      label: Text(
+                        _submitting ? 'Updating…' : 'Mark Payroll as Received',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
           SectionCard(
             title: 'Report Details',
             child: _divided(colors, [
-              _detailRow(colors, 'Professor Name', report.professorName),
-              _detailRow(colors, 'Professor ID', report.professorId),
-              _detailRow(colors, 'Department', report.department),
-              _detailRow(colors, 'Position', report.position),
-              _detailRow(
-                colors,
-                'Date of Shift',
-                _formatDate(report.shiftDate),
-              ),
+              _detailRow(colors, 'Professor Name', r.professorName),
+              _detailRow(colors, 'Professor ID', r.professorId),
+              _detailRow(colors, 'Department', r.department),
+              _detailRow(colors, 'Position', r.position),
+              _detailRow(colors, 'Date of Shift', _formatDate(r.shiftDate)),
             ]),
           ),
         ],
@@ -146,7 +224,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   /// Report progress through the four backend stages
   /// (pending, department, HR, accounting).
-  Widget _progressCard(AppColors colors, int stage) {
+  Widget _progressCard(AppColors colors, ReportItem r, int stage) {
     final done = stage == 4;
     final active = done ? colors.success : colors.accentActive;
 
@@ -209,7 +287,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Updated ${_formatDate(report.updatedAt)}',
+            'Updated ${_formatDate(r.updatedAt)}',
             style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
           ),
         ],

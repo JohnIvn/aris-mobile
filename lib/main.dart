@@ -13,6 +13,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import './stores/report_stores.dart';
 
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
@@ -23,6 +24,7 @@ Future<void> main() async {
 
   runApp(ArisApp(auth: authService));
 }
+
 
 class ArisApp extends StatefulWidget {
   const ArisApp({super.key, required this.auth});
