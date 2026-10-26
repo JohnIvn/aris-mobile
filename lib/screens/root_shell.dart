@@ -71,7 +71,8 @@ class _RootShellState extends State<RootShell> {
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
     final store = _notifications!;
-    final name = AuthScope.of(context).user?.name ?? '';
+    final user = AuthScope.of(context).user;
+    final name = user?.name ?? '';
 
     final screens = [
       HomeScreen(onSeeReports: goToReports, onSeePayroll: goToPayroll),
@@ -99,6 +100,7 @@ class _RootShellState extends State<RootShell> {
             currentIndex: _index,
             unreadCount: store.unreadCount,
             profileInitial: name.isEmpty ? '?' : name[0].toUpperCase(),
+            profileAvatarUrl: user?.avatarUrl,
             onTap: _onTabTap,
           ),
         ),

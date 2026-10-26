@@ -24,6 +24,54 @@ class ProfileScreen extends StatelessWidget {
   static String _cap(String s) =>
       s.isEmpty ? '—' : s[0].toUpperCase() + s.substring(1);
 
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final colors = ThemeScope.colorsOf(context);
+    final auth = AuthScope.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: colors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Sign out?',
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          'You will need to sign in again to access your account.',
+          style: TextStyle(color: colors.textSecondary, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: colors.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Sign out',
+              style: TextStyle(
+                color: colors.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      auth.signOut();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
@@ -178,7 +226,7 @@ class ProfileScreen extends StatelessWidget {
           SizedBox(
             height: 52,
             child: OutlinedButton.icon(
-              onPressed: auth.signOut,
+              onPressed: () => _confirmSignOut(context),
               icon: const Icon(Icons.logout_rounded, size: 20),
               label: const Text('Sign out'),
               style: OutlinedButton.styleFrom(

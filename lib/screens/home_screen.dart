@@ -209,11 +209,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _header(AppColors colors, ReportItem? latest) {
     // Prefer the signed-in user; fall back to the report's professor.
-    final full = (_store.auth?.user?.name.isNotEmpty ?? false)
-        ? _store.auth!.user!.name
+    final user = _store.auth?.user;
+    final full = (user?.name.isNotEmpty ?? false)
+        ? user!.name
         : (latest?.professorName ?? '');
     final name = full.trim().split(RegExp(r'\s+')).first;
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
+    final avatarUrl = user?.avatarUrl;
+
+    final initialAvatar = Text(
+      initial,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+      ),
+    );
 
     return Row(
       children: [
@@ -225,14 +236,17 @@ class _HomeScreenState extends State<HomeScreen> {
             color: colors.accentActive,
             shape: BoxShape.circle,
           ),
-          child: Text(
-            initial,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          child: avatarUrl != null && avatarUrl.isNotEmpty
+              ? ClipOval(
+                  child: Image.network(
+                    avatarUrl,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => initialAvatar,
+                  ),
+                )
+              : initialAvatar,
         ),
         const SizedBox(width: 12),
         Expanded(
