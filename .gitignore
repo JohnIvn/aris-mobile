@@ -50,3 +50,8 @@ app.*.map.json
 # Variables
 .env
 *.env
+
+# Keys
+*.jks
+/android/key.properties
+ks.b64
