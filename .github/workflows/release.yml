@@ -70,6 +70,20 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install NDK (with retry)
+        run: |
+          NDK_VERSION=28.2.13676358
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          for i in 1 2 3; do
+            rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+            if yes | "$SDKMANAGER" --install "ndk;$NDK_VERSION"; then
+              break
+            fi
+            echo "NDK install attempt $i failed, retrying..."
+            sleep 10
+          done
+          test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties" || { echo "::error::NDK install failed"; exit 1; }
+
       - name: Set up release signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -77,7 +91,13 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.jks
+          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_PASSWORD KEY_ALIAS; do
+            if [ -z "${!v}" ]; then echo "::error::Secret $v is empty or missing"; exit 1; fi
+          done
+          echo "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > android/app/release.jks
+          ls -l android/app/release.jks
+          keytool -list -keystore android/app/release.jks \
+            -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS"
           {
             printf 'storeFile=release.jks\n'
             printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
