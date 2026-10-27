@@ -47,7 +47,7 @@ class NotificationService {
   Future<List<NotificationItem>> fetch({int offset = 0}) async {
     final decoded = await _send(
       () => http.get(
-        Uri.parse('$_baseUrl$_listPath?offset=$offset&limit=$_pageSize'),
+        Uri.parse('$_baseUrl$_listPath/mobile?offset=$offset&limit=$_pageSize'),
         headers: _headers(),
       ),
     );
