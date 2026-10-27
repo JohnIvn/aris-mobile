@@ -13,7 +13,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import './stores/report_stores.dart';
 
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
@@ -22,22 +21,24 @@ Future<void> main() async {
   ReportsStore().auth = authService;
   await authService.restoreSession();
 
-  runApp(ArisApp(auth: authService));
+  final themeService = ThemeService();
+  await themeService.load();
+
+  runApp(ArisApp(auth: authService, themeService: themeService));
 }
 
-
 class ArisApp extends StatefulWidget {
-  const ArisApp({super.key, required this.auth});
+  const ArisApp({super.key, required this.auth, required this.themeService});
 
   final AuthService auth;
+  final ThemeService themeService;
 
   @override
   State<ArisApp> createState() => _ArisAppState();
 }
 
 class _ArisAppState extends State<ArisApp> {
-  final ThemeService _themeService = ThemeService();
-
+  ThemeService get _themeService => widget.themeService;
   AuthService get _authService => widget.auth;
 
   @override

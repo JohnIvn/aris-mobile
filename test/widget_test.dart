@@ -12,13 +12,21 @@ import 'package:aris_mobile/services/auth_service.dart';
 import 'package:aris_mobile/stores/report_stores.dart';
 import 'package:aris_mobile/main.dart';
 
+import 'package:aris_mobile/theme/theme_service.dart';
+
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     final authService = AuthService();
     ReportsStore().auth = authService;
     await authService.restoreSession();
-    await tester.pumpWidget(ArisApp(auth: authService));
+
+    final themeService = ThemeService();
+    await themeService.load();
+
+    await tester.pumpWidget(
+      ArisApp(auth: authService, themeService: themeService),
+    );
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);

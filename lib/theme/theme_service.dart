@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_colors.dart';
 
@@ -8,8 +8,6 @@ import 'app_colors.dart';
 class ThemeService extends ChangeNotifier {
   static const _modeKey = 'theme_mode';
 
-  final _storage = const FlutterSecureStorage();
-
   PaletteMode _mode = PaletteMode.light;
 
   PaletteMode get mode => _mode;
@@ -17,7 +15,8 @@ class ThemeService extends ChangeNotifier {
 
   Future<void> load() async {
     try {
-      final saved = await _storage.read(key: _modeKey);
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_modeKey);
       final match = PaletteMode.values.where((m) => m.name == saved);
       if (match.isNotEmpty && match.first != _mode) {
         _mode = match.first;
@@ -33,7 +32,8 @@ class ThemeService extends ChangeNotifier {
     _mode = newMode;
     notifyListeners();
     try {
-      await _storage.write(key: _modeKey, value: newMode.name);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_modeKey, newMode.name);
     } catch (e) {
       debugPrint('ThemeService.setMode save failed: $e');
     }
