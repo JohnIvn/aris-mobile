@@ -30,8 +30,10 @@ class ReportsStore extends ChangeNotifier {
   AuthService? auth;
 
   List<ReportItem> _reports = const [];
+  List<ReportItem> _weeklyCache = const [];
   final Map<String, int> _stageNo = {};
   final Map<String, List<DtrEntry>> _dtr = {};
+  final Map<String, String> _periodMonths = {};
   bool _loading = false;
   bool _loadingMore = false;
   bool _hasMore = true;
@@ -212,11 +214,16 @@ class ReportsStore extends ChangeNotifier {
       ];
 
       if (reset) {
-        _reports = parsed;
+        _weeklyCache = parsed;
+        _reports = _groupByMonth(parsed);
         _offset = rows.length;
       } else {
-        final known = _reports.map((r) => r.id).toSet();
-        _reports = [..._reports, ...parsed.where((r) => !known.contains(r.id))];
+        final known = _weeklyCache.map((r) => r.id).toSet();
+        _weeklyCache = [
+          ..._weeklyCache,
+          ...parsed.where((r) => !known.contains(r.id)),
+        ];
+        _reports = _groupByMonth(_weeklyCache);
         _offset += rows.length;
       }
       _hasMore = rows.length >= _pageSize;
@@ -228,6 +235,77 @@ class ReportsStore extends ChangeNotifier {
       _loadingMore = false;
       notifyListeners();
     }
+  }
+
+  List<ReportItem> _groupByMonth(List<ReportItem> reports) {
+    final grouped = <String, List<ReportItem>>{};
+    for (final report in reports) {
+      final month = _periodMonths[report.id] ?? _monthKey(report.shiftDate);
+      grouped.putIfAbsent(month, () => []).add(report);
+    }
+
+    final monthly = <ReportItem>[];
+    for (final entry in grouped.entries) {
+      final items = entry.value
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      final latest = items.first;
+      final monthId = 'month-${entry.key}';
+      final ars = <ArItem>[];
+      final dtr = <DtrEntry>[];
+      for (final item in items) {
+        ars.addAll(ArService().forReport(item));
+        dtr.addAll(dtrEntriesOf(item));
+      }
+      final monthlyReport = ReportItem(
+        id: monthId,
+        periodLabel: _monthLabel(entry.key),
+        stage: latest.stage,
+        updatedAt: latest.updatedAt,
+        rejectionRemarks: latest.rejectionRemarks,
+        professorName: latest.professorName,
+        professorId: latest.professorId,
+        department: latest.department,
+        position: latest.position,
+        shiftDate: items
+            .map((r) => r.shiftDate)
+            .reduce((a, b) => a.isBefore(b) ? a : b),
+        reportNarrative: latest.reportNarrative,
+        dtrTally: items.fold(0.0, (sum, r) => sum + r.dtrTally),
+        arTaskTally: ars.length,
+        payrollStatus: latest.payrollStatus,
+        payrollAvailableAt: latest.payrollAvailableAt,
+        payrollReceivedAt: latest.payrollReceivedAt,
+      );
+      _periodMonths[monthId] = entry.key;
+      ArService().setForReport(monthId, ars);
+      _dtr[monthId] = dtr;
+      monthly.add(monthlyReport);
+    }
+    monthly.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return monthly;
+  }
+
+  String _monthKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
+
+  String _monthLabel(String key) {
+    final parts = key.split('-');
+    final date = DateTime(int.parse(parts[0]), int.parse(parts[1]));
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${months[date.month - 1]} ${date.year}';
   }
 
   // ---- parsing ------------------------------------------------------------
@@ -305,6 +383,7 @@ class ReportsStore extends ChangeNotifier {
   ReportItem _parse(Map<String, dynamic> j) {
     final id = _s(j['id']);
     final updatedAt = _dt(j['updatedAt'], DateTime.now());
+    _periodMonths[id] = _monthKey(_dt(j['periodStart'], updatedAt));
     final stageNo = _stageNumber(_s(j['stage'])).clamp(1, 4);
     _stageNo[id] = stageNo;
 
