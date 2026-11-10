@@ -6,11 +6,11 @@ import '../services/notifications_service.dart';
 import '../stores/notification_stores.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/app_bottom_nav.dart';
-import 'dtr_screen.dart';
 import 'home_screen.dart';
 import 'notifications_screen.dart';
 import 'payroll_screen.dart';
 import 'profile_screen.dart';
+import 'records_screen.dart';
 import 'reports_screen.dart';
 
 /// Top-level scaffold: owns the bottom nav and swaps between the
@@ -77,7 +77,7 @@ class _RootShellState extends State<RootShell> {
     final screens = [
       HomeScreen(onSeeReports: goToReports, onSeePayroll: goToPayroll),
       ReportsScreen(focusedReportId: _focusedReportId),
-      const DtrScreen(),
+      const RecordsScreen(),
       const PayrollScreen(),
       NotificationsScreen(
         onOpenReport: (id) => goToReports(reportId: id),

@@ -37,7 +37,7 @@ class AppBottomNav extends StatelessWidget {
     (
       icon: Icons.access_time_rounded,
       activeIcon: Icons.access_time_filled_rounded,
-      label: 'DTR',
+      label: 'Records',
     ),
     (
       icon: Icons.payments_outlined,
@@ -184,4 +184,3 @@ class AppBottomNav extends StatelessWidget {
     );
   }
 }
-  

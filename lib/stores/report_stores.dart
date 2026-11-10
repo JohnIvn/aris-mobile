@@ -309,9 +309,13 @@ class ReportsStore extends ChangeNotifier {
     _stageNo[id] = stageNo;
 
     final arTally = j['arTally'] as Map?;
-    final entries = ((arTally?['entries'] as List?) ?? const [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    final entries =
+        ((j['arEntries'] as List?) ??
+                (j['entries'] as List?) ??
+                (arTally?['entries'] as List?) ??
+                const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
 
     // Backend sends no per-AR approvals: stages before the report's current
     // stage count as approved, the rest are pending.

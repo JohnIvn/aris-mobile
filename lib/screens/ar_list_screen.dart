@@ -21,31 +21,6 @@ class _ArListScreenState extends State<ArListScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final now = DateTime.now();
-    final service = ArService();
-    final ars = service.forReport(widget.report);
-
-    List<ArItem> inGroup(Set<ArStatus> s) =>
-        ars.where((a) => s.contains(a.statusAt(now))).toList();
-
-    final groups = <(String, String?, List<ArItem>)>[
-      (
-        'For resubmission',
-        'Resubmit before the semi-monthly cutoff, otherwise it moves to the next period.',
-        inGroup({ArStatus.forResubmission}),
-      ),
-      ('Submitted ARs', null, inGroup({ArStatus.inReview, ArStatus.approved})),
-      (
-        'Invalid',
-        'Removed from this batch so payroll is not delayed. Can be filed again next period.',
-        inGroup({ArStatus.invalid}),
-      ),
-      (
-        'Forwarded to next period',
-        'Resubmission deadline was missed; automatically carried to the next submission.',
-        inGroup({ArStatus.forwarded}),
-      ),
-    ];
 
     return Scaffold(
       backgroundColor: colors.canvas,
@@ -61,61 +36,62 @@ class _ArListScreenState extends State<ArListScreen> {
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-        children: [
-          for (final g in groups)
-            if (g.$3.isNotEmpty)
-              SectionCard(
-                title: '${g.$1} (${g.$3.length})',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (g.$2 != null) ...[
-                      Text(
-                        g.$2!,
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 12.5,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    for (var i = 0; i < g.$3.length; i++) ...[
-                      if (i > 0)
-                        Divider(
-                          height: 20,
-                          thickness: 1,
-                          color: colors.border.withValues(alpha: 0.5),
-                        ),
-                      _arTile(context, colors, g.$3[i], now),
-                    ],
-                  ],
-                ),
-              ),
-          if (ars.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'No ARs submitted for this report.',
-                  style: TextStyle(color: colors.textSecondary, fontSize: 13),
-                ),
+      body: ArRecordsView(report: widget.report),
+    );
+  }
+}
+
+class ArRecordsView extends StatefulWidget {
+  final ReportItem report;
+
+  const ArRecordsView({super.key, required this.report});
+
+  @override
+  State<ArRecordsView> createState() => _ArRecordsViewState();
+}
+
+class _ArRecordsViewState extends State<ArRecordsView> {
+  @override
+  Widget build(BuildContext context) {
+    final colors = ThemeScope.colorsOf(context);
+    final service = ArService();
+    final ars = service.forReport(widget.report);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      children: [
+        if (ars.isNotEmpty)
+          SectionCard(
+            title: 'AR Records',
+            child: Column(
+              children: [
+                for (var i = 0; i < ars.length; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 20,
+                      thickness: 1,
+                      color: colors.border.withValues(alpha: 0.5),
+                    ),
+                  _arTile(context, colors, ars[i]),
+                ],
+              ],
+            ),
+          ),
+        if (ars.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(32),
+            child: Center(
+              child: Text(
+                'No ARs submitted for this report.',
+                style: TextStyle(color: colors.textSecondary, fontSize: 13),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
-  Widget _arTile(
-    BuildContext context,
-    AppColors colors,
-    ArItem ar,
-    DateTime now,
-  ) {
-    final status = ar.statusAt(now);
+  Widget _arTile(BuildContext context, AppColors colors, ArItem ar) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -193,22 +169,6 @@ class _ArListScreenState extends State<ArListScreen> {
                         ),
                       ],
                     ),
-                    if (status.isActive) ...[
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: ar.progress,
-                          minHeight: 5,
-                          backgroundColor: colors.border.withValues(alpha: 0.5),
-                          valueColor: AlwaysStoppedAnimation(
-                            status == ArStatus.approved
-                                ? colors.success
-                                : colors.accentActive,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
