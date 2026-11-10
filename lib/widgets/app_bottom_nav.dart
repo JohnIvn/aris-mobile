@@ -24,8 +24,8 @@ class AppBottomNav extends StatelessWidget {
     this.profileAvatarUrl,
   });
 
-  static const _notificationsIndex = 4;
-  static const _profileIndex = 5;
+  static const _notificationsIndex = 5;
+  static const _profileIndex = 6;
 
   static const _items = [
     (icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
@@ -38,6 +38,11 @@ class AppBottomNav extends StatelessWidget {
       icon: Icons.access_time_rounded,
       activeIcon: Icons.access_time_filled_rounded,
       label: 'Records',
+    ),
+    (
+      icon: Icons.upload_file_outlined,
+      activeIcon: Icons.upload_file_rounded,
+      label: 'Submit',
     ),
     (
       icon: Icons.payments_outlined,

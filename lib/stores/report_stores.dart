@@ -91,6 +91,8 @@ class ReportsStore extends ChangeNotifier {
           headers: {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',
+            ...{'Authorization': 'Bearer $token'},
+            ...{'Authorization': 'Bearer $token'},
           },
         )
         .timeout(const Duration(seconds: 15));
@@ -138,6 +140,67 @@ class ReportsStore extends ChangeNotifier {
           payrollReceivedAt: r.payrollReceivedAt,
         );
       notifyListeners();
+    }
+  }
+
+  /// Submits every DTR row in [report]'s calendar month for review.
+  Future<void> submitDtrMonth(ReportItem report) async {
+    final base = dotenv.env['SERVER_URL'];
+    if (base == null || base.isEmpty) {
+      throw StateError('SERVER_URL is not set in .env');
+    }
+    final a = auth;
+    final token = a?.token;
+    if (a == null || token == null || token.isEmpty) {
+      throw Exception('Not signed in.');
+    }
+
+    final entries = dtrEntriesOf(report);
+    if (entries.isEmpty) {
+      throw Exception('There are no DTR records for ${report.periodLabel}.');
+    }
+    final year = report.shiftDate.year;
+    final month = report.shiftDate.month;
+    final firstDay = DateTime(year, month, 1);
+    final lastDay = DateTime(year, month + 1, 0);
+    String dateOnly(DateTime date) =>
+        '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+    final payload = {
+      'periodStart': dateOnly(firstDay),
+      'periodEnd': dateOnly(lastDay),
+    };
+    final uri = Uri.parse(
+      '${base.replaceAll(RegExp(r'/+$'), '')}/professor/dtr-submissions',
+    );
+    debugPrint(
+      '[ReportsStore] Submitting DTR data:\n${const JsonEncoder.withIndent('  ').convert(payload)}',
+    );
+    final res = await http
+        .post(
+          uri,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 401) {
+      await a.signOut();
+      throw Exception('Session expired. Please sign in again.');
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      Object? body;
+      try {
+        body = jsonDecode(res.body);
+      } catch (_) {}
+      final message = body is Map
+          ? (body['error'] ?? body['message'] ?? 'unknown')
+          : 'status ${res.statusCode}';
+      throw Exception('Could not submit DTR: $message');
     }
   }
 

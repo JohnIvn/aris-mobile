@@ -12,9 +12,10 @@ import 'payroll_screen.dart';
 import 'profile_screen.dart';
 import 'records_screen.dart';
 import 'reports_screen.dart';
+import 'submit_screen.dart';
 
 /// Top-level scaffold: owns the bottom nav and swaps between the
-/// six main tabs. Deep-linking goes through [goToReports];
+/// seven main tabs. Deep-linking goes through [goToReports];
 /// [goToPayroll] jumps straight to the Payroll tab.
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
@@ -37,7 +38,7 @@ class _RootShellState extends State<RootShell> {
 
   void goToPayroll() {
     setState(() {
-      _index = 3;
+      _index = 4;
     });
   }
 
@@ -64,7 +65,7 @@ class _RootShellState extends State<RootShell> {
       _focusedReportId = null;
     });
     // Refresh on open; items are marked read only when tapped.
-    if (i == 4) _notifications!.load();
+    if (i == 5) _notifications!.load();
   }
 
   @override
@@ -78,6 +79,7 @@ class _RootShellState extends State<RootShell> {
       HomeScreen(onSeeReports: goToReports, onSeePayroll: goToPayroll),
       ReportsScreen(focusedReportId: _focusedReportId),
       const RecordsScreen(),
+      const SubmitScreen(),
       const PayrollScreen(),
       NotificationsScreen(
         onOpenReport: (id) => goToReports(reportId: id),
