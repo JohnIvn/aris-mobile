@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/ar_item.dart';
 import '../models/report_item.dart';
 import '../models/status.dart';
 import '../services/ar_service.dart';
@@ -225,6 +226,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   /// Report progress through the four backend stages
   /// (pending, department, HR, accounting).
   Widget _progressCard(AppColors colors, ReportItem r, int stage) {
+    final ars = ArService().forReport(r);
+    if (ars.isNotEmpty) {
+      return _arProgressCard(colors, ars);
+    }
+
     final done = stage == 4;
     final active = done ? colors.success : colors.accentActive;
 
@@ -293,6 +299,100 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _arProgressCard(AppColors colors, List<ArItem> ars) {
+    final now = DateTime.now();
+    return SectionCard(
+      title: 'AR Progress',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < ars.length; i++) ...[
+                if (i > 0) const SizedBox(width: 4),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      height: 10,
+                      color: colors.border.withValues(alpha: 0.5),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: ars[i].progress.clamp(0, 1),
+                        child: Container(
+                          color: _arProgressColor(colors, ars[i], now),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < ars.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${i + 1}. ${ars[i].course}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Text(
+                  _arStatusLabel(ars[i], now),
+                  style: TextStyle(
+                    color: _arProgressColor(colors, ars[i], now),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _arProgressColor(AppColors colors, ArItem ar, DateTime now) {
+    switch (ar.statusAt(now)) {
+      case ArStatus.approved:
+        return colors.success;
+      case ArStatus.forResubmission:
+      case ArStatus.invalid:
+        return colors.error;
+      case ArStatus.forwarded:
+        return colors.textSecondary;
+      case ArStatus.inReview:
+        return colors.accentActive;
+    }
+  }
+
+  String _arStatusLabel(ArItem ar, DateTime now) {
+    switch (ar.statusAt(now)) {
+      case ArStatus.approved:
+        return 'Approved';
+      case ArStatus.forResubmission:
+        return 'For resubmission';
+      case ArStatus.invalid:
+        return 'Invalid';
+      case ArStatus.forwarded:
+        return 'Forwarded';
+      case ArStatus.inReview:
+        final stage = ar.currentApproval?.stage.label ?? 'Checker';
+        return '$stage · ${(ar.progress * 100).round()}%';
+    }
   }
 
   /// Clickable AR count that opens the AR list.

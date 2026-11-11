@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/ar_item.dart';
 import '../models/report_item.dart';
+import '../models/status.dart';
 import '../services/ar_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
+import '../widgets/status_badge.dart';
 import 'ar_detail_screen.dart';
 
 class ArListScreen extends StatefulWidget {
@@ -92,6 +94,7 @@ class _ArRecordsViewState extends State<ArRecordsView> {
   }
 
   Widget _arTile(BuildContext context, AppColors colors, ArItem ar) {
+    final status = _statusFor(ar);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -169,6 +172,8 @@ class _ArRecordsViewState extends State<ArRecordsView> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    StatusBadge(label: status.$1, kind: status.$2),
                   ],
                 ),
               ),
@@ -179,5 +184,24 @@ class _ArRecordsViewState extends State<ArRecordsView> {
         ),
       ),
     );
+  }
+
+  (String, StatusColorKind) _statusFor(ArItem ar) {
+    final current = ar.statusAt(DateTime.now());
+    if (current == ArStatus.approved) {
+      return ('Approved', StatusColorKind.success);
+    }
+    if (current == ArStatus.invalid) {
+      return ('Invalid', StatusColorKind.error);
+    }
+    if (current == ArStatus.forResubmission) {
+      return ('For resubmission', StatusColorKind.error);
+    }
+    if (current == ArStatus.forwarded) {
+      return ('Forwarded', StatusColorKind.neutral);
+    }
+
+    final stage = ar.currentApproval?.stage.label ?? 'Checker';
+    return (stage, StatusColorKind.info);
   }
 }
