@@ -368,9 +368,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
   ) {
     final isFocused = report.id == widget.focusedReportId;
     final s = ArService().summarize(report);
+    final dtrProgress = report.dtrStatus == null
+        ? 0
+        : report.dtrStatus == 'approved'
+        ? 100
+        : ((report.dtrStage - 1) / 3 * 100).round().clamp(0, 100);
+    final combinedPercent = s.total == 0
+        ? dtrProgress
+        : ((s.percent + dtrProgress) / 2).round();
     final stage = s.total == 0
         ? _store.stageOf(report)
-        : ((s.percent / 100) * 4).ceil().clamp(1, 4);
+        : ((combinedPercent / 100) * 4).ceil().clamp(1, 4);
 
     return SectionCard(
       padding: EdgeInsets.zero,
@@ -464,7 +472,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     Text(
                       s.total == 0
                           ? 'Stage $stage of 4 · ${ReportsStore.stageLabels[stage - 1]}'
-                          : '${s.percent}% average · ${s.total} ARs',
+                          : '$combinedPercent% average · ${s.total} ARs + DTR',
                       style: TextStyle(
                         color: colors.text,
                         fontSize: 13,

@@ -101,6 +101,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
           _progressCard(colors, r, stage),
+          _dtrProgressCard(colors, r),
           SectionCard(
             title: 'Tally',
             child: Row(
@@ -217,6 +218,65 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               _detailRow(colors, 'Position', r.position),
               _detailRow(colors, 'Date of Shift', _formatDate(r.shiftDate)),
             ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dtrProgressCard(AppColors colors, ReportItem report) {
+    final stage = report.dtrStage.clamp(1, 4);
+    final labels = ReportsStore.stageLabels;
+    final isSubmitted = report.dtrStatus != null;
+    final isApproved =
+        isSubmitted && (report.dtrStatus == 'approved' || stage == 4);
+    final active = isApproved ? colors.success : colors.accentActive;
+
+    return SectionCard(
+      title: 'DTR Review Progress',
+      action: StatusBadge(
+        label: !isSubmitted
+            ? 'Not submitted'
+            : isApproved
+            ? 'Approved'
+            : labels[stage - 1],
+        kind: !isSubmitted
+            ? StatusColorKind.neutral
+            : isApproved
+            ? StatusColorKind.success
+            : StatusColorKind.info,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              for (var n = 1; n <= 4; n++) ...[
+                if (n > 1) const SizedBox(width: 4),
+                Expanded(
+                  child: Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: n <= stage
+                          ? active
+                          : colors.border.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            !isSubmitted
+                ? 'DTR has not been submitted for review'
+                : 'Stage $stage of 4 · ${isApproved ? 'Approved' : labels[stage - 1]}',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

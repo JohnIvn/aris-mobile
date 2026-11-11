@@ -125,6 +125,8 @@ class ReportsStore extends ChangeNotifier {
           id: r.id,
           periodLabel: r.periodLabel,
           stage: r.stage,
+          dtrStage: r.dtrStage,
+          dtrStatus: r.dtrStatus,
           updatedAt: r.updatedAt,
           rejectionRemarks: r.rejectionRemarks,
           professorName: r.professorName,
@@ -323,6 +325,8 @@ class ReportsStore extends ChangeNotifier {
         id: monthId,
         periodLabel: _monthLabel(entry.key),
         stage: latest.stage,
+        dtrStage: latest.dtrStage,
+        dtrStatus: latest.dtrStatus,
         updatedAt: latest.updatedAt,
         rejectionRemarks: latest.rejectionRemarks,
         professorName: latest.professorName,
@@ -449,6 +453,11 @@ class ReportsStore extends ChangeNotifier {
     _periodMonths[id] = _monthKey(_dt(j['periodStart'], updatedAt));
     final stageNo = _stageNumber(_s(j['stage'])).clamp(1, 4);
     _stageNo[id] = stageNo;
+    final dtrStage = _stageNumber(
+      _s(j['dtr_approval_stage'] ?? j['dtrApprovalStage']),
+    ).clamp(1, 4);
+    final dtrStageValue = _s(j['dtr_approval_stage'] ?? j['dtrApprovalStage']);
+    final dtrStatusValue = _s(j['dtr_status'] ?? j['dtrStatus']);
 
     final arTally = j['arTally'] as Map?;
     final entries =
@@ -527,6 +536,12 @@ class ReportsStore extends ChangeNotifier {
       id: id,
       periodLabel: _s(j['periodLabel']),
       stage: _pipelineStage(stageNo),
+      dtrStage: dtrStage,
+      dtrStatus: dtrStatusValue.isNotEmpty
+          ? dtrStatusValue
+          : dtrStageValue.startsWith('DTR-AP-STG-')
+          ? 'pending'
+          : null,
       updatedAt: updatedAt,
       professorName: _s(j['professorName']),
       professorId: _s(j['professorId']),

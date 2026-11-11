@@ -6,6 +6,8 @@ class ReportItem {
   final String id;
   final String periodLabel;
   final PipelineStage stage;
+  final int dtrStage;
+  final String? dtrStatus;
   final DateTime updatedAt;
 
   /// Reason given when [stage] is [PipelineStage.rejected]. Rejections
@@ -35,6 +37,8 @@ class ReportItem {
     required this.id,
     required this.periodLabel,
     required this.stage,
+    this.dtrStage = 1,
+    this.dtrStatus,
     required this.updatedAt,
     this.rejectionRemarks,
     required this.professorName,
