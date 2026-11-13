@@ -6,8 +6,6 @@ class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  final int unreadCount;
-
   /// Letter shown in the profile avatar when there is no [profileAvatarUrl]
   /// (or it fails to load).
   final String profileInitial;
@@ -19,13 +17,11 @@ class AppBottomNav extends StatelessWidget {
     super.key,
     required this.currentIndex,
     required this.onTap,
-    this.unreadCount = 0,
     this.profileInitial = '?',
     this.profileAvatarUrl,
   });
 
-  static const _notificationsIndex = 5;
-  static const _profileIndex = 6;
+  static const _profileIndex = 4;
 
   static const _items = [
     (icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
@@ -35,24 +31,14 @@ class AppBottomNav extends StatelessWidget {
       label: 'Reports',
     ),
     (
-      icon: Icons.access_time_rounded,
-      activeIcon: Icons.access_time_filled_rounded,
-      label: 'Records',
-    ),
-    (
-      icon: Icons.upload_file_outlined,
-      activeIcon: Icons.upload_file_rounded,
-      label: 'Submit',
-    ),
-    (
       icon: Icons.payments_outlined,
       activeIcon: Icons.payments_rounded,
       label: 'Payroll',
     ),
     (
-      icon: Icons.notifications_outlined,
-      activeIcon: Icons.notifications_rounded,
-      label: 'Notifications',
+      icon: Icons.send_outlined,
+      activeIcon: Icons.send_rounded,
+      label: 'Submit',
     ),
     (
       icon: Icons.person_outline_rounded,
@@ -76,7 +62,6 @@ class AppBottomNav extends StatelessWidget {
       ),
     );
 
-    // Transparent wrapper: the bar floats over the scaffold background.
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.only(bottom: 8),
@@ -84,7 +69,7 @@ class AppBottomNav extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         child: Container(
           height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(32),
@@ -101,20 +86,15 @@ class AppBottomNav extends StatelessWidget {
             children: List.generate(_items.length, (i) {
               final selected = i == currentIndex;
               final item = _items[i];
-
-              final label = i == _notificationsIndex && unreadCount > 0
-                  ? '${item.label}, $unreadCount unread'
-                  : item.label;
-
               final Color iconColor = selected
                   ? colors.accentActive
                   : colors.text;
 
-              Widget content;
+              Widget iconWidget;
               if (i == _profileIndex) {
-                content = Container(
-                  width: 32,
-                  height: 32,
+                iconWidget = Container(
+                  width: 30,
+                  height: 30,
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -140,33 +120,23 @@ class AppBottomNav extends StatelessWidget {
                   ),
                 );
               } else {
-                final icon = Icon(
+                iconWidget = Icon(
                   selected ? item.activeIcon : item.icon,
                   size: 24,
                   color: iconColor,
                 );
-                content = i == _notificationsIndex
-                    ? Badge.count(
-                        count: unreadCount,
-                        isLabelVisible: unreadCount > 0,
-                        backgroundColor: colors.error,
-                        textColor: Colors.white,
-                        child: icon,
-                      )
-                    : icon;
               }
 
               return Expanded(
-                flex: selected ? 7 : 5,
                 child: Semantics(
                   button: true,
                   selected: selected,
-                  label: label,
+                  label: item.label,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => onTap(i),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
                         alignment: Alignment.center,
@@ -174,9 +144,9 @@ class AppBottomNav extends StatelessWidget {
                           color: selected
                               ? colors.accent.withValues(alpha: 0.14)
                               : Colors.transparent,
-                          borderRadius: BorderRadius.circular(23),
+                          borderRadius: BorderRadius.circular(24),
                         ),
-                        child: content,
+                        child: iconWidget,
                       ),
                     ),
                   ),

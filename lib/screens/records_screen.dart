@@ -11,7 +11,9 @@ import '../widgets/status_badge.dart';
 import 'ar_list_screen.dart';
 
 class RecordsScreen extends StatefulWidget {
-  const RecordsScreen({super.key});
+  final bool embedded;
+
+  const RecordsScreen({super.key, this.embedded = false});
 
   @override
   State<RecordsScreen> createState() => _RecordsScreenState();
@@ -59,27 +61,46 @@ class _RecordsScreenState extends State<RecordsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Records',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
+            if (!widget.embedded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Records',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                  ),
-                  if (report != null) ...[
-                    const SizedBox(height: 4),
+                    if (report != null) ...[
+                      const SizedBox(height: 4),
+                      _periodSelector(colors, report),
+                    ],
+                  ],
+                ),
+              )
+            else if (report != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                child: Row(
+                  children: [
+                    Text(
+                      'Period:',
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     _periodSelector(colors, report),
                   ],
-                ],
+                ),
               ),
-            ),
             TabBar(
               labelColor: colors.accentActive,
               unselectedLabelColor: colors.textSecondary,
@@ -169,7 +190,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
         children: [
-          const SizedBox(height: 16),
           if (report == null)
             _emptyReport(colors)
           else ...[

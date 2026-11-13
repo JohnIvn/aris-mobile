@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
 import '../widgets/status_badge.dart';
+import 'records_screen.dart';
 import 'report_detail_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -25,12 +26,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
   final _searchController = TextEditingController();
   String _query = '';
   int? _filterStage; // null = All, else backend stage 1-4
+  int _viewIndex = 0; // 0 = Current, 1 = Records
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
     if (_store.reports.isEmpty) _store.load();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReportsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusedReportId != null &&
+        widget.focusedReportId != oldWidget.focusedReportId) {
+      setState(() => _viewIndex = 0);
+    }
   }
 
   @override
@@ -54,6 +65,88 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Widget _content(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
+
+    return Container(
+      color: colors.canvas,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Reports',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _segmentedToggle(colors),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _viewIndex == 0
+                ? _currentView(colors)
+                : const RecordsScreen(embedded: true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _segmentedToggle(AppColors colors) {
+    const segments = ['Current', 'Records'];
+
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border.withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        children: List.generate(segments.length, (i) {
+          final selected = _viewIndex == i;
+          return Expanded(
+            child: Semantics(
+              button: true,
+              selected: selected,
+              label: segments[i],
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _viewIndex = i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected ? colors.accentActive : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    segments[i],
+                    style: TextStyle(
+                      color: selected ? Colors.white : colors.textSecondary,
+                      fontSize: 13.5,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _currentView(AppColors colors) {
     final allReports = _store.reports;
 
     final reports = allReports.where((r) {
@@ -67,87 +160,74 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return matchesQuery && matchesFilter;
     }).toList();
 
-    return Container(
-      color: colors.canvas,
-      child: RefreshIndicator(
-        onRefresh: _store.load,
-        child: CustomScrollView(
-          controller: _scroll,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Reports',
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    if (allReports.isNotEmpty) _summaryCard(colors, allReports),
-                    _searchField(
-                      colors,
-                      controller: _searchController,
-                      hint: 'Search by period or professor',
-                      onChanged: (v) =>
-                          setState(() => _query = v.trim().toLowerCase()),
-                      onClear: () => setState(() => _query = ''),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
+    return RefreshIndicator(
+      onRefresh: _store.load,
+      child: CustomScrollView(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (allReports.isNotEmpty) _summaryCard(colors, allReports),
+                  _searchField(
+                    colors,
+                    controller: _searchController,
+                    hint: 'Search by period or professor',
+                    onChanged: (v) =>
+                        setState(() => _query = v.trim().toLowerCase()),
+                    onClear: () => setState(() => _query = ''),
+                  ),
+                  const SizedBox(height: 12),
+                ],
               ),
             ),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 38,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                children: [
+                  _filterChip(
+                    colors,
+                    label: 'All',
+                    selected: _filterStage == null,
+                    onTap: () => setState(() => _filterStage = null),
+                  ),
+                  const SizedBox(width: 8),
+                  for (var n = 1; n <= 4; n++) ...[
                     _filterChip(
                       colors,
-                      label: 'All',
-                      selected: _filterStage == null,
-                      onTap: () => setState(() => _filterStage = null),
+                      label: ReportsStore.stageLabels[n - 1],
+                      selected: _filterStage == n,
+                      onTap: () => setState(() => _filterStage = n),
                     ),
                     const SizedBox(width: 8),
-                    for (var n = 1; n <= 4; n++) ...[
-                      _filterChip(
-                        colors,
-                        label: ReportsStore.stageLabels[n - 1],
-                        selected: _filterStage == n,
-                        onTap: () => setState(() => _filterStage = n),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
                   ],
+                ],
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          if (reports.isEmpty)
+            SliverToBoxAdapter(child: _emptyState(colors, allReports.isEmpty))
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => _reportCard(context, colors, reports[i]),
+                  childCount: reports.length,
                 ),
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            if (reports.isEmpty)
-              SliverToBoxAdapter(child: _emptyState(colors, allReports.isEmpty))
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) => _reportCard(context, colors, reports[i]),
-                    childCount: reports.length,
-                  ),
-                ),
-              ),
-            SliverToBoxAdapter(child: _footer(colors, allReports.isNotEmpty)),
-          ],
-        ),
+          SliverToBoxAdapter(child: _footer(colors, allReports.isNotEmpty)),
+        ],
       ),
     );
   }

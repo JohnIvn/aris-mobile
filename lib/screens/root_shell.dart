@@ -10,13 +10,11 @@ import 'home_screen.dart';
 import 'notifications_screen.dart';
 import 'payroll_screen.dart';
 import 'profile_screen.dart';
-import 'records_screen.dart';
 import 'reports_screen.dart';
 import 'submit_screen.dart';
 
-/// Top-level scaffold: owns the bottom nav and swaps between the
-/// seven main tabs. Deep-linking goes through [goToReports];
-/// [goToPayroll] jumps straight to the Payroll tab.
+/// Top-level scaffold: owns the 5-item bottom nav and swaps between
+/// Home, Reports (Current + Records), Payroll, Submit, and Profile.
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
 
@@ -38,8 +36,31 @@ class _RootShellState extends State<RootShell> {
 
   void goToPayroll() {
     setState(() {
-      _index = 4;
+      _index = 2;
     });
+  }
+
+  void _openNotifications() {
+    final store = _notifications!;
+    store.load();
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NotificationScope(
+          store: store,
+          child: NotificationsScreen(
+            onOpenReport: (id) {
+              Navigator.of(context).pop();
+              goToReports(reportId: id);
+            },
+            onOpenPayroll: () {
+              Navigator.of(context).pop();
+              goToPayroll();
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -64,8 +85,6 @@ class _RootShellState extends State<RootShell> {
       _index = i;
       _focusedReportId = null;
     });
-    // Refresh on open; items are marked read only when tapped.
-    if (i == 5) _notifications!.load();
   }
 
   @override
@@ -76,15 +95,15 @@ class _RootShellState extends State<RootShell> {
     final name = user?.name ?? '';
 
     final screens = [
-      HomeScreen(onSeeReports: goToReports, onSeePayroll: goToPayroll),
-      ReportsScreen(focusedReportId: _focusedReportId),
-      const RecordsScreen(),
-      const SubmitScreen(),
-      const PayrollScreen(),
-      NotificationsScreen(
-        onOpenReport: (id) => goToReports(reportId: id),
-        onOpenPayroll: goToPayroll,
+      HomeScreen(
+        notificationStore: store,
+        onSeeReports: goToReports,
+        onSeePayroll: goToPayroll,
+        onSeeNotifications: _openNotifications,
       ),
+      ReportsScreen(focusedReportId: _focusedReportId),
+      const PayrollScreen(),
+      const SubmitScreen(),
       const ProfileScreen(),
     ];
 
@@ -96,15 +115,11 @@ class _RootShellState extends State<RootShell> {
           bottom: false,
           child: IndexedStack(index: _index, children: screens),
         ),
-        bottomNavigationBar: ListenableBuilder(
-          listenable: store,
-          builder: (context, _) => AppBottomNav(
-            currentIndex: _index,
-            unreadCount: store.unreadCount,
-            profileInitial: name.isEmpty ? '?' : name[0].toUpperCase(),
-            profileAvatarUrl: user?.avatarUrl,
-            onTap: _onTabTap,
-          ),
+        bottomNavigationBar: AppBottomNav(
+          currentIndex: _index,
+          profileInitial: name.isEmpty ? '?' : name[0].toUpperCase(),
+          profileAvatarUrl: user?.avatarUrl,
+          onTap: _onTabTap,
         ),
       ),
     );

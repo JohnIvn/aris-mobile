@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/report_item.dart';
 import '../models/status.dart';
+import '../stores/notification_stores.dart';
 import '../stores/report_stores.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
@@ -9,13 +10,17 @@ import '../widgets/section_card.dart';
 import '../widgets/status_badge.dart';
 
 class HomeScreen extends StatefulWidget {
+  final NotificationStore notificationStore;
   final void Function({String? reportId}) onSeeReports;
   final VoidCallback onSeePayroll;
+  final VoidCallback onSeeNotifications;
 
   const HomeScreen({
     super.key,
+    required this.notificationStore,
     required this.onSeeReports,
     required this.onSeePayroll,
+    required this.onSeeNotifications,
   });
 
   @override
@@ -270,6 +275,51 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+        ),
+        const SizedBox(width: 8),
+        ListenableBuilder(
+          listenable: widget.notificationStore,
+          builder: (context, _) {
+            final unreadCount = widget.notificationStore.unreadCount;
+            final bellIcon = Icon(
+              unreadCount > 0
+                  ? Icons.notifications_rounded
+                  : Icons.notifications_outlined,
+              color: colors.text,
+              size: 22,
+            );
+
+            return Semantics(
+              button: true,
+              label: unreadCount > 0
+                  ? 'Notifications, $unreadCount unread'
+                  : 'Notifications',
+              child: Material(
+                color: colors.surface,
+                shape: CircleBorder(
+                  side: BorderSide(color: colors.border.withValues(alpha: 0.6)),
+                ),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: widget.onSeeNotifications,
+                  child: SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Center(
+                      child: unreadCount > 0
+                          ? Badge.count(
+                              count: unreadCount,
+                              backgroundColor: colors.error,
+                              textColor: Colors.white,
+                              child: bellIcon,
+                            )
+                          : bellIcon,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
