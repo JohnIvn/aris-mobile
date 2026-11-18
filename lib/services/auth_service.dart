@@ -82,7 +82,11 @@ class AuthService extends ChangeNotifier {
   static const _userKey = 'auth_user';
   static const _installFlagKey = 'has_run_before';
 
-  final _storage = const FlutterSecureStorage();
+  final _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      resetOnError: true,
+    ),
+  );
   Future<void>? _googleInit;
   String? _pendingIdToken; // reused by sign-up after a 404 on sign-in
 
@@ -107,28 +111,38 @@ class AuthService extends ChangeNotifier {
 
   /// Call once at app start, before showing the login screen.
   Future<void> restoreSession() async {
-    // Secure storage can outlive an uninstall (iOS Keychain, Android backup).
-    // SharedPreferences does not, so a missing flag means a fresh install:
-    // wipe any leftover session.
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_installFlagKey) != true) {
-      await _storage.deleteAll();
-      await prefs.setBool(_installFlagKey, true);
-    }
+    try {
+      // Secure storage can outlive an uninstall (iOS Keychain, Android backup).
+      // SharedPreferences does not, so a missing flag means a fresh install:
+      // wipe any leftover session.
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_installFlagKey) != true) {
+        try {
+          await _storage.deleteAll();
+        } catch (e) {
+          debugPrint('[OAuth] Secure storage clean on fresh install failed: $e');
+        }
+        await prefs.setBool(_installFlagKey, true);
+      }
 
-    final token = await _storage.read(key: _tokenKey);
-    final raw = await _storage.read(key: _userKey);
+      final token = await _storage.read(key: _tokenKey);
+      final raw = await _storage.read(key: _userKey);
 
-    if (token == null || raw == null || _isExpired(token)) {
+      if (token == null || raw == null || _isExpired(token)) {
+        await _clear();
+      } else {
+        _token = token;
+        _user = AuthUser.fromJson(
+          Map<String, dynamic>.from(jsonDecode(raw) as Map),
+        );
+        _status = AuthStatus.authenticated;
+      }
+    } catch (e, st) {
+      debugPrint('[OAuth] Failed to restore session: $e\n$st');
       await _clear();
-    } else {
-      _token = token;
-      _user = AuthUser.fromJson(
-        Map<String, dynamic>.from(jsonDecode(raw) as Map),
-      );
-      _status = AuthStatus.authenticated;
+    } finally {
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<void> signInWithOAuth() async {
@@ -348,8 +362,12 @@ class AuthService extends ChangeNotifier {
     _user = AuthUser.fromJson(userJson);
     _status = AuthStatus.authenticated;
 
-    await _storage.write(key: _tokenKey, value: _token);
-    await _storage.write(key: _userKey, value: jsonEncode(userJson));
+    try {
+      await _storage.write(key: _tokenKey, value: _token);
+      await _storage.write(key: _userKey, value: jsonEncode(userJson));
+    } catch (e) {
+      debugPrint('[OAuth] Failed to write secure storage: $e');
+    }
   }
 
   Future<void> _clear() async {
@@ -359,7 +377,11 @@ class AuthService extends ChangeNotifier {
     _needsSignUp = false;
     _pendingIdToken = null;
     _status = AuthStatus.unauthenticated;
-    await _storage.deleteAll();
+    try {
+      await _storage.deleteAll();
+    } catch (e) {
+      debugPrint('[OAuth] Failed to clear secure storage: $e');
+    }
   }
 
   bool _isExpired(String token) {
