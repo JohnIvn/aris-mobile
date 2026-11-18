@@ -79,6 +79,11 @@ class AuthService extends ChangeNotifier {
     return v.isNotEmpty ? v : (dotenv.env['SERVER_URL'] ?? '');
   }
 
+  static String get _androidClientId {
+    const v = String.fromEnvironment('ANDROID_GOOGLE_CLIENT_ID');
+    return v.isNotEmpty ? v : (dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '');
+  }
+
   // static String get _androidClientId =>
   //     dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '';
 
@@ -272,7 +277,7 @@ class AuthService extends ChangeNotifier {
   Future<void> _ensureGoogleInit() {
     return _googleInit ??= GoogleSignIn.instance
         .initialize(
-          clientId: Platform.isIOS ? _iosClientId : null,
+        clientId: Platform.isIOS ? _iosClientId : _androidClientId,
           serverClientId: _webClientId,
         )
         .catchError((Object e) {
