@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -79,13 +80,10 @@ class AuthService extends ChangeNotifier {
     return v.isNotEmpty ? v : (dotenv.env['SERVER_URL'] ?? '');
   }
 
-  static String get _androidClientId {
-    const v = String.fromEnvironment('ANDROID_GOOGLE_CLIENT_ID');
-    return v.isNotEmpty ? v : (dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '');
-  }
-
-  // static String get _androidClientId =>
-  //     dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '';
+  // static String get _androidClientId {
+  //   const v = String.fromEnvironment('ANDROID_GOOGLE_CLIENT_ID');
+  //   return v.isNotEmpty ? v : (dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '');
+  // }
 
   static String get _iosClientId {
     const v = String.fromEnvironment('IOS_GOOGLE_CLIENT_ID');
@@ -101,7 +99,14 @@ class AuthService extends ChangeNotifier {
       resetOnError: true,
     ),
   );
-  Future<void>? _googleInit;
+  GoogleSignIn? _googleSignIn;
+  GoogleSignIn get _google => _googleSignIn ??= GoogleSignIn(
+        serverClientId: _webClientId.isNotEmpty ? _webClientId : null,
+        clientId: Platform.isIOS
+            ? (_iosClientId.isNotEmpty ? _iosClientId : null)
+            : null,
+        scopes: const ['email', 'profile'],
+      );
   String? _pendingIdToken; // reused by sign-up after a 404 on sign-in
 
   AuthStatus _status = AuthStatus.unauthenticated;
@@ -265,8 +270,7 @@ class AuthService extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
-      await _ensureGoogleInit();
-      await GoogleSignIn.instance.signOut();
+      await _google.signOut();
     } catch (_) {}
     await _clear();
     notifyListeners();
@@ -274,40 +278,36 @@ class AuthService extends ChangeNotifier {
 
   // --------------------------------------------------------------- private
 
-  Future<void> _ensureGoogleInit() {
-    return _googleInit ??= GoogleSignIn.instance
-        .initialize(
-        clientId: Platform.isIOS ? _iosClientId : _androidClientId,
-          serverClientId: _webClientId,
-        )
-        .catchError((Object e) {
-          _googleInit = null;
-          throw e;
-        });
-  }
-
   Future<String> _getIdToken() async {
     try {
-      await _ensureGoogleInit();
-      final account = await GoogleSignIn.instance.authenticate();
-      final idToken = account.authentication.idToken;
+      final account = await _google.signIn();
+      if (account == null) {
+        throw AuthException('Sign-in cancelled', cancelled: true);
+      }
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
       if (idToken == null) {
         throw AuthException('Google did not return an ID token');
       }
       return idToken;
-    } on GoogleSignInException catch (e) {
+    } on PlatformException catch (e) {
       debugPrint(
-        '[OAuth] GoogleSignInException code=${e.code} description=${e.description} details=${e.details}',
+        '[OAuth] PlatformException code=${e.code} message=${e.message} details=${e.details}',
       );
-      if (e.code == GoogleSignInExceptionCode.canceled) {
+      if (e.code == 'sign_in_canceled' ||
+          e.code == GoogleSignIn.kSignInCanceledError) {
         throw AuthException(
-          'Sign-in cancelled (${e.description ?? 'no details'})',
+          'Sign-in cancelled (${e.message ?? 'no details'})',
           cancelled: true,
         );
       }
       throw AuthException(
-        'Google sign-in failed: ${e.description ?? e.code.name}',
+        'Google sign-in failed: ${e.message ?? e.code}',
       );
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      debugPrint('[OAuth] Unexpected sign-in error: $e');
+      throw AuthException('Google sign-in failed: $e');
     }
   }
 
