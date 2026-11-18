@@ -8,7 +8,7 @@ import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
 import '../widgets/status_badge.dart';
-import 'ar_list_screen.dart';
+import 'meet_list_screen.dart';
 
 class RecordsScreen extends StatefulWidget {
   final bool embedded;
@@ -107,7 +107,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
               indicatorColor: colors.accentActive,
               tabs: const [
                 Tab(text: 'DTR'),
-                Tab(text: 'AR'),
+                Tab(text: 'Meet'),
               ],
             ),
             Expanded(
@@ -116,7 +116,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                   _dtrTab(context, report),
                   report == null
                       ? _emptyReport(colors)
-                      : ArRecordsView(report: report),
+                      : const MeetRecordsView(),
                 ],
               ),
             ),

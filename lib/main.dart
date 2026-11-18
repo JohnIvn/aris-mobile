@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import './stores/report_stores.dart';
+import './services/meet_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +34,7 @@ Future<void> main() async {
 
   final authService = AuthService();
   ReportsStore().auth = authService;
+  MeetService().auth = authService;
   try {
     await authService.restoreSession();
   } catch (e) {
