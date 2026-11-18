@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "196154438936",
+    "project_id": "hoshizora-917ad",
+    "storage_bucket": "hoshizora-917ad.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:196154438936:android:19fbd86d5409e820b89a6d",
+        "android_client_info": {
+          "package_name": "com.example.aris_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGB3ZVp72Utj1H0Pv-G9V8D7PdsbQqwO4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
