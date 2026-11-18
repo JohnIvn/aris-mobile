@@ -125,6 +125,8 @@ jobs:
             printf 'WEB_GOOGLE_CLIENT_ID_SECRET=%s\n' "$WEB_GOOGLE_CLIENT_ID_SECRET"
             printf 'APP_GITHUB_USERNAME=%s\n' "$REPO_OWNER"
             printf 'APP_GITHUB_REPOSITORY=%s\n' "$REPO_NAME"
+            printf 'GITHUB_USERNAME=%s\n' "$REPO_OWNER"
+            printf 'GITHUB_REPOSITORY=%s\n' "$REPO_NAME"
             printf 'MODE=production\n'
           } > .env
 

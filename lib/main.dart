@@ -15,14 +15,32 @@ import './stores/report_stores.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint(details.toString());
+  };
+
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e) {
+    debugPrint('[main] dotenv.load failed: $e');
+  }
 
   final authService = AuthService();
   ReportsStore().auth = authService;
-  await authService.restoreSession();
+  try {
+    await authService.restoreSession();
+  } catch (e) {
+    debugPrint('[main] authService.restoreSession failed: $e');
+  }
 
   final themeService = ThemeService();
-  await themeService.load();
+  try {
+    await themeService.load();
+  } catch (e) {
+    debugPrint('[main] themeService.load failed: $e');
+  }
 
   runApp(ArisApp(auth: authService, themeService: themeService));
 }
