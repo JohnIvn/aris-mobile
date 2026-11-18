@@ -100,6 +100,48 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
+          if (r.isDisapproved) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colors.error.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.cancel, color: colors.error, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Submission Disapproved',
+                        style: TextStyle(
+                          color: colors.error,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    r.rejectionRemarks != null &&
+                            r.rejectionRemarks!.isNotEmpty
+                        ? r.rejectionRemarks!
+                        : 'This submission has been disapproved and returned to you for correction.',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           _progressCard(colors, r, stage),
           _dtrProgressCard(colors, r),
           SectionCard(
@@ -160,7 +202,20 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                       _formatDate(r.payrollReceivedAt!),
                     ),
                 ]),
-                if (r.payrollStatus == PayrollStatus.notAvailable) ...[
+                if (r.isDisapproved ||
+                    r.payrollStatus == PayrollStatus.disapproved) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    'Payroll is blocked because this period\'s submission was disapproved. '
+                    'Please correct any issues and resubmit your report.',
+                    style: TextStyle(
+                      color: colors.error,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
+                  ),
+                ] else if (r.payrollStatus == PayrollStatus.notAvailable) ...[
                   const SizedBox(height: 14),
                   Text(
                     'Payroll unlocks once Department, HR, and Accounting '
@@ -228,19 +283,29 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     final stage = report.dtrStage.clamp(1, 4);
     final labels = ReportsStore.stageLabels;
     final isSubmitted = report.dtrStatus != null;
+    final isDisapproved = report.dtrStatus == 'disapproved' ||
+        report.dtrStatus == 'rejected';
     final isApproved =
-        isSubmitted && (report.dtrStatus == 'approved' || stage == 4);
-    final active = isApproved ? colors.success : colors.accentActive;
+        isSubmitted && !isDisapproved && (report.dtrStatus == 'approved' || stage == 4);
+    final active = isDisapproved
+        ? colors.error
+        : isApproved
+        ? colors.success
+        : colors.accentActive;
 
     return SectionCard(
       title: 'DTR Review Progress',
       action: StatusBadge(
-        label: !isSubmitted
+        label: isDisapproved
+            ? 'Disapproved'
+            : !isSubmitted
             ? 'Not submitted'
             : isApproved
             ? 'Approved'
             : labels[stage - 1],
-        kind: !isSubmitted
+        kind: isDisapproved
+            ? StatusColorKind.error
+            : !isSubmitted
             ? StatusColorKind.neutral
             : isApproved
             ? StatusColorKind.success
@@ -269,11 +334,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            !isSubmitted
+            isDisapproved
+                ? 'DTR was disapproved and returned for correction'
+                : !isSubmitted
                 ? 'DTR has not been submitted for review'
                 : 'Stage $stage of 4 · ${isApproved ? 'Approved' : labels[stage - 1]}',
             style: TextStyle(
-              color: colors.text,
+              color: isDisapproved ? colors.error : colors.text,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -288,17 +355,27 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   Widget _progressCard(AppColors colors, ReportItem r, int stage) {
     final ars = ArService().forReport(r);
     if (ars.isNotEmpty) {
-      return _arProgressCard(colors, ars);
+      return _arProgressCard(colors, ars, r);
     }
 
     final done = stage == 4;
-    final active = done ? colors.success : colors.accentActive;
+    final active = r.isDisapproved
+        ? colors.error
+        : done
+        ? colors.success
+        : colors.accentActive;
 
     return SectionCard(
       title: 'Progress',
       action: StatusBadge(
-        label: ReportsStore.stageLabels[stage - 1],
-        kind: done ? StatusColorKind.success : StatusColorKind.info,
+        label: r.isDisapproved
+            ? 'Disapproved'
+            : ReportsStore.stageLabels[stage - 1],
+        kind: r.isDisapproved
+            ? StatusColorKind.error
+            : done
+            ? StatusColorKind.success
+            : StatusColorKind.info,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -361,10 +438,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     );
   }
 
-  Widget _arProgressCard(AppColors colors, List<ArItem> ars) {
+  Widget _arProgressCard(AppColors colors, List<ArItem> ars, ReportItem r) {
     final now = DateTime.now();
     return SectionCard(
       title: 'AR Progress',
+      action: r.isDisapproved
+          ? StatusBadge(label: 'Disapproved', kind: StatusColorKind.error)
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -155,8 +155,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
           r.periodLabel.toLowerCase().contains(_query) ||
           r.professorName.toLowerCase().contains(_query) ||
           r.professorId.toLowerCase().contains(_query);
-      final matchesFilter =
-          _filterStage == null || _store.stageOf(r) == _filterStage;
+      final matchesFilter = _filterStage == null
+          ? true
+          : _filterStage == -1
+          ? r.isDisapproved
+          : !r.isDisapproved && _store.stageOf(r) == _filterStage;
       return matchesQuery && matchesFilter;
     }).toList();
 
@@ -198,6 +201,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     label: 'All',
                     selected: _filterStage == null,
                     onTap: () => setState(() => _filterStage = null),
+                  ),
+                  const SizedBox(width: 8),
+                  _filterChip(
+                    colors,
+                    label: 'Disapproved',
+                    selected: _filterStage == -1,
+                    onTap: () => setState(() => _filterStage = -1),
                   ),
                   const SizedBox(width: 8),
                   for (var n = 1; n <= 4; n++) ...[
@@ -515,15 +525,56 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: StatusBadge(
-                        label: ReportsStore
-                            .stageLabels[_store.stageOf(report) - 1],
-                        kind: _store.stageOf(report) == 4
+                        label: report.isDisapproved
+                            ? 'Disapproved'
+                            : ReportsStore
+                                .stageLabels[_store.stageOf(report) - 1],
+                        kind: report.isDisapproved
+                            ? StatusColorKind.error
+                            : _store.stageOf(report) == 4
                             ? StatusColorKind.success
                             : StatusColorKind.info,
                       ),
                     ),
                   ],
                 ),
+                if (report.isDisapproved) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: colors.error.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline, size: 16, color: colors.error),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            report.rejectionRemarks != null &&
+                                    report.rejectionRemarks!.isNotEmpty
+                                ? report.rejectionRemarks!
+                                : 'Disapproved and returned for correction.',
+                            style: TextStyle(
+                              color: colors.error,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -550,11 +601,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                     const Spacer(),
                     Text(
-                      s.total == 0
+                      report.isDisapproved
+                          ? 'Action Required · Disapproved'
+                          : s.total == 0
                           ? 'Stage $stage of 4 · ${ReportsStore.stageLabels[stage - 1]}'
                           : '$combinedPercent% average · ${s.total} ARs + DTR',
                       style: TextStyle(
-                        color: colors.text,
+                        color: report.isDisapproved ? colors.error : colors.text,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
@@ -570,7 +623,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         child: Container(
                           height: 6,
                           decoration: BoxDecoration(
-                            color: n <= stage
+                            color: report.isDisapproved
+                                ? (n == 1
+                                    ? colors.error
+                                    : colors.border.withValues(alpha: 0.5))
+                                : n <= stage
                                 ? (stage == 4
                                       ? colors.success
                                       : colors.accentActive)

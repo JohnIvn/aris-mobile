@@ -321,14 +321,24 @@ class ReportsStore extends ChangeNotifier {
         ars.addAll(ArService().forReport(item));
         dtr.addAll(dtrEntriesOf(item));
       }
+      final rejectedItem =
+          items.where((r) => r.stage == PipelineStage.rejected).firstOrNull;
+      final stage =
+          rejectedItem != null ? PipelineStage.rejected : latest.stage;
+      final rejectionRemarks =
+          rejectedItem?.rejectionRemarks ?? latest.rejectionRemarks;
+      final payrollStatus = rejectedItem != null
+          ? PayrollStatus.disapproved
+          : latest.payrollStatus;
+
       final monthlyReport = ReportItem(
         id: monthId,
         periodLabel: _monthLabel(entry.key),
-        stage: latest.stage,
+        stage: stage,
         dtrStage: latest.dtrStage,
         dtrStatus: latest.dtrStatus,
         updatedAt: latest.updatedAt,
-        rejectionRemarks: latest.rejectionRemarks,
+        rejectionRemarks: rejectionRemarks,
         professorName: latest.professorName,
         professorId: latest.professorId,
         department: latest.department,
@@ -339,7 +349,7 @@ class ReportsStore extends ChangeNotifier {
         reportNarrative: latest.reportNarrative,
         dtrTally: items.fold(0.0, (sum, r) => sum + r.dtrTally),
         arTaskTally: ars.length,
-        payrollStatus: latest.payrollStatus,
+        payrollStatus: payrollStatus,
         payrollAvailableAt: latest.payrollAvailableAt,
         payrollReceivedAt: latest.payrollReceivedAt,
       );
@@ -525,8 +535,26 @@ class ReportsStore extends ChangeNotifier {
         ? updatedAt
         : ars.map((a) => a.classDate).reduce((a, b) => a.isBefore(b) ? a : b);
 
-    // received wins over available; neither means not available yet.
-    final payrollStatus = _b(j['payroll_received'])
+    final subStatus =
+        _s(j['submission_status'] ?? j['status']).toLowerCase();
+    final isDisapproved = subStatus == 'disapproved' ||
+        subStatus == 'rejected' ||
+        dtrStatusValue.toLowerCase() == 'disapproved' ||
+        dtrStatusValue.toLowerCase() == 'rejected' ||
+        (_s(j['remarks']).toLowerCase().contains('disapprov') &&
+            !_s(j['remarks']).toLowerCase().contains('resubmit'));
+
+    final rejectionRemarks = isDisapproved
+        ? (_s(j['submission_notes']).isNotEmpty
+            ? _s(j['submission_notes'])
+            : _s(j['remarks'], 'Returned for correction'))
+        : null;
+
+    // Disapproved reports are blocked from payroll; received wins over available;
+    // neither means not available yet.
+    final payrollStatus = isDisapproved
+        ? PayrollStatus.disapproved
+        : _b(j['payroll_received'])
         ? PayrollStatus.received
         : _b(j['payroll_availability'])
         ? PayrollStatus.available
@@ -535,7 +563,7 @@ class ReportsStore extends ChangeNotifier {
     return ReportItem(
       id: id,
       periodLabel: _s(j['periodLabel']),
-      stage: _pipelineStage(stageNo),
+      stage: isDisapproved ? PipelineStage.rejected : _pipelineStage(stageNo),
       dtrStage: dtrStage,
       dtrStatus: dtrStatusValue.isNotEmpty
           ? dtrStatusValue
@@ -543,6 +571,7 @@ class ReportsStore extends ChangeNotifier {
           ? 'pending'
           : null,
       updatedAt: updatedAt,
+      rejectionRemarks: rejectionRemarks,
       professorName: _s(j['professorName']),
       professorId: _s(j['professorId']),
       department: _s(j['department'], '—'),

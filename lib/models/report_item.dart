@@ -53,4 +53,9 @@ class ReportItem {
     this.payrollAvailableAt,
     this.payrollReceivedAt,
   });
+
+  bool get isDisapproved =>
+      stage == PipelineStage.rejected ||
+      dtrStatus == 'disapproved' ||
+      dtrStatus == 'rejected';
 }

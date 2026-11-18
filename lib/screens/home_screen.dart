@@ -430,6 +430,12 @@ class _HomeScreenState extends State<HomeScreen> {
           'No action required',
           (c) => c.accent,
         );
+      case PayrollStatus.disapproved:
+        return _NextAction(
+          Icons.error_outline,
+          'Submission disapproved — action required',
+          (c) => c.error,
+        );
       case PayrollStatus.notAvailable:
         break;
     }

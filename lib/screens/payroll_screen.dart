@@ -62,8 +62,10 @@ class _PayrollScreenState extends State<PayrollScreen> {
         .where((r) => r.payrollStatus == PayrollStatus.received)
         .length;
     final pending = allReports
-        .where((r) => r.payrollStatus == PayrollStatus.notAvailable)
+        .where((r) =>
+            r.payrollStatus == PayrollStatus.notAvailable && !r.isDisapproved)
         .length;
+    final disapproved = allReports.where((r) => r.isDisapproved).length;
 
     final reports = allReports.where((r) {
       final matchesQuery =
@@ -108,6 +110,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
               available: available,
               received: received,
               pending: pending,
+              disapproved: disapproved,
             ),
             _searchField(
               colors,
@@ -212,11 +215,13 @@ class _PayrollScreenState extends State<PayrollScreen> {
     required int available,
     required int received,
     required int pending,
+    required int disapproved,
   }) {
     final segments = <(int, Color)>[
       (received, colors.success),
       (available, colors.info),
       (pending, _pendingColor(colors)),
+      (disapproved, colors.error),
     ].where((s) => s.$1 > 0).toList();
 
     return SectionCard(
@@ -272,6 +277,15 @@ class _PayrollScreenState extends State<PayrollScreen> {
                   _pendingColor(colors),
                 ),
               ),
+              if (disapproved > 0)
+                Expanded(
+                  child: _overviewStat(
+                    colors,
+                    'Disapproved',
+                    disapproved,
+                    colors.error,
+                  ),
+                ),
             ],
           ),
           if (total > 0) ...[
@@ -344,6 +358,8 @@ class _PayrollScreenState extends State<PayrollScreen> {
         return colors.success;
       case PayrollStatus.notAvailable:
         return colors.textSecondary;
+      case PayrollStatus.disapproved:
+        return colors.error;
     }
   }
 
@@ -355,11 +371,19 @@ class _PayrollScreenState extends State<PayrollScreen> {
         return Icons.check_circle_outline;
       case PayrollStatus.notAvailable:
         return Icons.hourglass_empty;
+      case PayrollStatus.disapproved:
+        return Icons.cancel_outlined;
     }
   }
 
   String _subtitleFor(ReportItem report) {
-    if (report.payrollStatus == PayrollStatus.received) {
+    if (report.isDisapproved ||
+        report.payrollStatus == PayrollStatus.disapproved) {
+      return report.rejectionRemarks != null &&
+              report.rejectionRemarks!.isNotEmpty
+          ? 'Disapproved: ${report.rejectionRemarks}'
+          : 'Disapproved · Returned for correction';
+    } else if (report.payrollStatus == PayrollStatus.received) {
       return report.payrollReceivedAt != null
           ? 'Received ${_formatDate(report.payrollReceivedAt!)}'
           : 'Received';
@@ -377,16 +401,19 @@ class _PayrollScreenState extends State<PayrollScreen> {
     ReportItem report,
   ) {
     final accent = _statusColor(colors, report.payrollStatus);
-    // Payroll that is ready for release is the one thing worth drawing
-    // the eye to, so it gets a soft tint.
+    final isDisapproved =
+        report.isDisapproved || report.payrollStatus == PayrollStatus.disapproved;
     final highlight = report.payrollStatus == PayrollStatus.available;
+    final tileBg = highlight
+        ? colors.info.withValues(alpha: 0.06)
+        : isDisapproved
+        ? colors.error.withValues(alpha: 0.04)
+        : Colors.transparent;
 
     return SectionCard(
       padding: EdgeInsets.zero,
       child: Material(
-        color: highlight
-            ? colors.info.withValues(alpha: 0.06)
-            : Colors.transparent,
+        color: tileBg,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
@@ -397,72 +424,110 @@ class _PayrollScreenState extends State<PayrollScreen> {
           ),
           child: Padding(
             padding: const EdgeInsets.all(18),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    _statusIcon(report.payrollStatus),
-                    color: accent,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _statusIcon(report.payrollStatus),
+                        color: accent,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              report.periodLabel,
-                              style: TextStyle(
-                                color: colors.text,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  report.periodLabel,
+                                  style: TextStyle(
+                                    color: colors.text,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: StatusBadge(
+                                  label: isDisapproved
+                                      ? 'Disapproved'
+                                      : report.payrollStatus.label,
+                                  kind: isDisapproved
+                                      ? StatusColorKind.error
+                                      : report.payrollStatus.colorKind,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: StatusBadge(
-                              label: report.payrollStatus.label,
-                              kind: report.payrollStatus.colorKind,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _subtitleFor(report),
-                              style: TextStyle(
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _subtitleFor(report),
+                                  style: TextStyle(
+                                    color: isDisapproved
+                                        ? colors.error
+                                        : colors.textSecondary,
+                                    fontSize: 12.5,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right,
                                 color: colors.textSecondary,
-                                fontSize: 12.5,
-                                height: 1.35,
+                                size: 20,
                               ),
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            color: colors.textSecondary,
-                            size: 20,
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+                if (isDisapproved &&
+                    report.rejectionRemarks != null &&
+                    report.rejectionRemarks!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: colors.error.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Text(
+                      'Remark: ${report.rejectionRemarks}',
+                      style: TextStyle(
+                        color: colors.error,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

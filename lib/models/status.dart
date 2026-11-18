@@ -60,7 +60,7 @@ enum StatusColorKind { success, warning, error, info, neutral }
 /// [PipelineStage] for that period is `completed` — i.e. all three
 /// admins have verified. [received] is a separate, later state once
 /// the professor has actually gotten paid.
-enum PayrollStatus { notAvailable, available, received }
+enum PayrollStatus { notAvailable, available, received, disapproved }
 
 extension PayrollStatusX on PayrollStatus {
   String get label {
@@ -71,6 +71,8 @@ extension PayrollStatusX on PayrollStatus {
         return 'Available for Release';
       case PayrollStatus.received:
         return 'Received';
+      case PayrollStatus.disapproved:
+        return 'Disapproved';
     }
   }
 
@@ -82,6 +84,8 @@ extension PayrollStatusX on PayrollStatus {
         return StatusColorKind.info;
       case PayrollStatus.received:
         return StatusColorKind.success;
+      case PayrollStatus.disapproved:
+        return StatusColorKind.error;
     }
   }
 }
