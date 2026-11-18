@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'app_env.dart';
 
 import '../models/notification_item.dart';
 
@@ -28,10 +28,7 @@ class NotificationService {
   static String _itemPath(String id) => '/notifications/$id';
   static const _pageSize = 50;
 
-  static String get _baseUrl {
-    const v = String.fromEnvironment('SERVER_URL');
-    return v.isNotEmpty ? v : (dotenv.env['SERVER_URL'] ?? '');
-  }
+  static String get _baseUrl => AppEnv.serverUrl;
 
   Map<String, String> _headers({bool json = false}) {
     final token = tokenProvider();

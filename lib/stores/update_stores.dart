@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:ota_update/ota_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+import '../services/app_env.dart';
 
 enum UpdateStatus { idle, checking, available, downloading, installing, error }
 
@@ -40,8 +41,8 @@ String? notes;
       return;
     }
 
-    final owner = dotenv.env['GITHUB_USERNAME']?.trim() ?? '';
-    final repo = dotenv.env['GITHUB_REPOSITORY']?.trim() ?? '';
+    final owner = AppEnv.githubUsername;
+    final repo = AppEnv.githubRepository;
     if (owner.isEmpty || repo.isEmpty) {
       debugPrint(
         'Update check skipped: GITHUB_USERNAME/GITHUB_REPOSITORY not set.',

@@ -6,9 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'app_env.dart';
 
 enum AuthStatus { unauthenticated, authenticating, authenticated }
 
@@ -70,27 +71,9 @@ class AuthService extends ChangeNotifier {
   // flutter run --dart-define=SERVER_URL=... \
   //   --dart-define=ANDROID_GOOGLE_CLIENT_ID=... \
   //   --dart-define=IOS_GOOGLE_CLIENT_ID=...
-  static String get _webClientId {
-    const v = String.fromEnvironment('WEB_GOOGLE_CLIENT_ID');
-    final raw = v.isNotEmpty ? v : (dotenv.env['WEB_GOOGLE_CLIENT_ID'] ?? '');
-    return raw.trim().replaceAll("'", '').replaceAll('"', '');
-  }
-
-  static String get _baseUrl {
-    const v = String.fromEnvironment('SERVER_URL');
-    final raw = v.isNotEmpty ? v : (dotenv.env['SERVER_URL'] ?? '');
-    return raw.trim().replaceAll("'", '').replaceAll('"', '');
-  }
-
-  // static String get _androidClientId {
-  //   const v = String.fromEnvironment('ANDROID_GOOGLE_CLIENT_ID');
-  //   return v.isNotEmpty ? v : (dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '');
-  // }
-
-  static String get _iosClientId {
-    const v = String.fromEnvironment('IOS_GOOGLE_CLIENT_ID');
-    return v.isNotEmpty ? v : (dotenv.env['IOS_GOOGLE_CLIENT_ID'] ?? '');
-  }
+  static String get _webClientId => AppEnv.webGoogleClientId;
+  static String get _baseUrl => AppEnv.serverUrl;
+  static String get _iosClientId => AppEnv.iosGoogleClientId;
 
   static const _tokenKey = 'auth_token';
   static const _userKey = 'auth_user';

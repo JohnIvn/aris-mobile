@@ -25,7 +25,10 @@ Future<void> main() async {
     await dotenv.load(fileName: '.env');
     debugPrint('[main] dotenv loaded OK');
   } catch (e) {
-    debugPrint('[main] dotenv.load failed: $e');
+    debugPrint('[main] dotenv.load failed: $e — initializing empty fallback');
+    try {
+      dotenv.loadFromString(envString: '', isOptional: true);
+    } catch (_) {}
   }
 
   final authService = AuthService();

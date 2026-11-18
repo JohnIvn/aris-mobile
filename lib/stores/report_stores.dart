@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/ar_item.dart';
@@ -10,6 +9,7 @@ import '../models/report_item.dart';
 import '../models/status.dart';
 import '../services/ar_service.dart';
 import '../services/auth_service.dart';
+import '../services/app_env.dart';
 
 /// Single source of truth for reports. Fetches
 /// `GET {SERVER_URL}/reports/mobile?offset=&limit=` with the backend JWT from
@@ -71,8 +71,8 @@ class ReportsStore extends ChangeNotifier {
   /// `PATCH {SERVER_URL}/reports/mobile/payroll?report_id=<id>`
   /// Marks the report's payroll as received. Throws on failure.
   Future<void> markPayrollReceived(String reportId) async {
-    final base = dotenv.env['SERVER_URL'];
-    if (base == null || base.isEmpty) {
+    final base = AppEnv.serverUrl;
+    if (base.isEmpty) {
       throw StateError('SERVER_URL is not set in .env');
     }
     final a = auth;
@@ -147,8 +147,8 @@ class ReportsStore extends ChangeNotifier {
 
   /// Submits every DTR row in [report]'s calendar month for review.
   Future<void> submitDtrMonth(ReportItem report) async {
-    final base = dotenv.env['SERVER_URL'];
-    if (base == null || base.isEmpty) {
+    final base = AppEnv.serverUrl;
+    if (base.isEmpty) {
       throw StateError('SERVER_URL is not set in .env');
     }
     final a = auth;
@@ -217,8 +217,8 @@ class ReportsStore extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final base = dotenv.env['SERVER_URL'];
-      if (base == null || base.isEmpty) {
+      final base = AppEnv.serverUrl;
+      if (base.isEmpty) {
         throw StateError('SERVER_URL is not set in .env');
       }
 
