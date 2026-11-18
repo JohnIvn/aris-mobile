@@ -133,7 +133,7 @@ jobs:
       - run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --build-name=${{ needs.version.outputs.build_name }} --build-number=${{ github.run_number }}
+        run: flutter build apk --release --build-name=${{ needs.version.outputs.build_name }} --build-number=${{ github.run_number }} --dart-define-from-file=.env
 
       - name: Rename APK
         run: |

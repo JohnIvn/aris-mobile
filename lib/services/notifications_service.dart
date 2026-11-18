@@ -28,7 +28,10 @@ class NotificationService {
   static String _itemPath(String id) => '/notifications/$id';
   static const _pageSize = 50;
 
-  static String get _baseUrl => dotenv.env['SERVER_URL'] ?? '';
+  static String get _baseUrl {
+    const v = String.fromEnvironment('SERVER_URL');
+    return v.isNotEmpty ? v : (dotenv.env['SERVER_URL'] ?? '');
+  }
 
   Map<String, String> _headers({bool json = false}) {
     final token = tokenProvider();

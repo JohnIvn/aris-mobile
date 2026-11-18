@@ -69,14 +69,23 @@ class AuthService extends ChangeNotifier {
   // flutter run --dart-define=SERVER_URL=... \
   //   --dart-define=ANDROID_GOOGLE_CLIENT_ID=... \
   //   --dart-define=IOS_GOOGLE_CLIENT_ID=...
-  static String get _webClientId => dotenv.env['WEB_GOOGLE_CLIENT_ID'] ?? '';
+  static String get _webClientId {
+    const v = String.fromEnvironment('WEB_GOOGLE_CLIENT_ID');
+    return v.isNotEmpty ? v : (dotenv.env['WEB_GOOGLE_CLIENT_ID'] ?? '');
+  }
 
-  static String get _baseUrl => dotenv.env['SERVER_URL'] ?? '';
+  static String get _baseUrl {
+    const v = String.fromEnvironment('SERVER_URL');
+    return v.isNotEmpty ? v : (dotenv.env['SERVER_URL'] ?? '');
+  }
 
   // static String get _androidClientId =>
   //     dotenv.env['ANDROID_GOOGLE_CLIENT_ID'] ?? '';
 
-  static String get _iosClientId => dotenv.env['IOS_GOOGLE_CLIENT_ID'] ?? '';
+  static String get _iosClientId {
+    const v = String.fromEnvironment('IOS_GOOGLE_CLIENT_ID');
+    return v.isNotEmpty ? v : (dotenv.env['IOS_GOOGLE_CLIENT_ID'] ?? '');
+  }
 
   static const _tokenKey = 'auth_token';
   static const _userKey = 'auth_user';
@@ -191,7 +200,9 @@ class AuthService extends ChangeNotifier {
 
       _pendingIdToken = null;
       _status = AuthStatus.unauthenticated;
-      _error = 'Sign-in failed: $e'; // TODO: restore kDebugMode check after debugging
+      _error = kDebugMode
+          ? 'Sign-in failed: $e'
+          : 'Sign-in failed. Please try again.';
     }
 
     debugPrint('[OAuth] Final status: $_status');

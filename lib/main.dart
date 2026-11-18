@@ -23,6 +23,7 @@ Future<void> main() async {
 
   try {
     await dotenv.load(fileName: '.env');
+    debugPrint('[main] dotenv loaded OK');
   } catch (e) {
     debugPrint('[main] dotenv.load failed: $e');
   }
