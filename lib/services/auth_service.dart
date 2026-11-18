@@ -191,9 +191,7 @@ class AuthService extends ChangeNotifier {
 
       _pendingIdToken = null;
       _status = AuthStatus.unauthenticated;
-      _error = kDebugMode
-          ? 'Sign-in failed: $e'
-          : 'Sign-in failed. Please try again.';
+      _error = 'Sign-in failed: $e'; // TODO: restore kDebugMode check after debugging
     }
 
     debugPrint('[OAuth] Final status: $_status');
