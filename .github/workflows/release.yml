@@ -137,6 +137,12 @@ jobs:
       - name: Build APK
         run: flutter build apk --release --build-name=${{ needs.version.outputs.build_name }} --build-number=${{ github.run_number }} --dart-define-from-file=.env
 
+      - name: Verify APK Signature
+        run: |
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          echo "Using build tools: $BUILD_TOOLS_DIR"
+          "$BUILD_TOOLS_DIR/apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk
+
       - name: Rename APK
         run: |
           mkdir -p dist

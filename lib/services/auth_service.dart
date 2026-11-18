@@ -72,12 +72,14 @@ class AuthService extends ChangeNotifier {
   //   --dart-define=IOS_GOOGLE_CLIENT_ID=...
   static String get _webClientId {
     const v = String.fromEnvironment('WEB_GOOGLE_CLIENT_ID');
-    return v.isNotEmpty ? v : (dotenv.env['WEB_GOOGLE_CLIENT_ID'] ?? '');
+    final raw = v.isNotEmpty ? v : (dotenv.env['WEB_GOOGLE_CLIENT_ID'] ?? '');
+    return raw.trim().replaceAll("'", '').replaceAll('"', '');
   }
 
   static String get _baseUrl {
     const v = String.fromEnvironment('SERVER_URL');
-    return v.isNotEmpty ? v : (dotenv.env['SERVER_URL'] ?? '');
+    final raw = v.isNotEmpty ? v : (dotenv.env['SERVER_URL'] ?? '');
+    return raw.trim().replaceAll("'", '').replaceAll('"', '');
   }
 
   // static String get _androidClientId {
@@ -301,8 +303,17 @@ class AuthService extends ChangeNotifier {
           cancelled: true,
         );
       }
+      final msg = e.message ?? e.code;
+      if (msg.contains('10') || e.code.contains('10')) {
+        final clientSnippet = _webClientId.length > 20
+            ? '${_webClientId.substring(0, 12)}...${_webClientId.substring(_webClientId.length - 10)}'
+            : _webClientId;
+        throw AuthException(
+          'Google Error 10 (DEVELOPER_ERROR). Key SHA-1 or Web Client ID ($clientSnippet) mismatch.',
+        );
+      }
       throw AuthException(
-        'Google sign-in failed: ${e.message ?? e.code}',
+        'Google sign-in failed: $msg',
       );
     } catch (e) {
       if (e is AuthException) rethrow;

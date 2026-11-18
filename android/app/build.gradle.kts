@@ -10,7 +10,10 @@ plugins {
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
+    println(">>> [GRADLE SIGNING] Found key.properties at: ${keystorePropertiesFile.absolutePath}")
     FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
+} else {
+    println(">>> [GRADLE SIGNING] WARNING: key.properties NOT found at: ${keystorePropertiesFile.absolutePath}")
 }
 
 android {
@@ -35,9 +38,12 @@ android {
     signingConfigs {
         create("release") {
             if (keystorePropertiesFile.exists()) {
+                val storePath = keystoreProperties["storeFile"] as String
+                val targetFile = if (file(storePath).exists()) file(storePath) else rootProject.file(storePath)
+                println(">>> [GRADLE SIGNING] Keystore file resolved to: ${targetFile.absolutePath} (exists: ${targetFile.exists()})")
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
+                storeFile = targetFile
                 storePassword = keystoreProperties["storePassword"] as String
             }
         }
@@ -45,11 +51,12 @@ android {
 
     buildTypes {
         release {
-            // Release keystore when key.properties exists (CI), debug otherwise.
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
+            if (keystorePropertiesFile.exists()) {
+                println(">>> [GRADLE SIGNING] Configuring release build with RELEASE signingConfig")
+                signingConfig = signingConfigs.getByName("release")
             } else {
-                signingConfigs.getByName("debug")
+                println(">>> [GRADLE SIGNING] Configuring release build with DEBUG signingConfig")
+                signingConfig = signingConfigs.getByName("debug")
             }
         }
     }
