@@ -67,8 +67,13 @@ class _SubmitScreenState extends State<SubmitScreen> {
                 colors,
                 icon: Icons.description_outlined,
                 title: 'AR',
-                description: 'AR submission will be available soon.',
-                enabled: false,
+                description:
+                    'Submit completed Meet sessions for one half-month period.',
+                enabled: report != null && report.arTaskTally == 0,
+                unavailableLabel: report != null && report.arTaskTally > 0
+                    ? 'Submitted'
+                    : null,
+                onTap: () => _submitAr(context, report),
               ),
               if (report != null) ...[
                 const SizedBox(height: 20),
@@ -77,7 +82,7 @@ class _SubmitScreenState extends State<SubmitScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'DTR period',
+                        'Submission period',
                         style: TextStyle(
                           color: colors.textSecondary,
                           fontSize: 12,
@@ -140,6 +145,7 @@ class _SubmitScreenState extends State<SubmitScreen> {
     required String title,
     required String description,
     required bool enabled,
+    String? unavailableLabel,
     VoidCallback? onTap,
   }) {
     return SectionCard(
@@ -157,7 +163,7 @@ class _SubmitScreenState extends State<SubmitScreen> {
         subtitle: Text(description),
         trailing: enabled
             ? Icon(Icons.chevron_right, color: colors.accentActive)
-            : const Text('Soon'),
+            : Text(unavailableLabel ?? 'Soon'),
         onTap: enabled ? onTap : null,
       ),
     );
@@ -186,6 +192,32 @@ class _SubmitScreenState extends State<SubmitScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('${report.periodLabel} DTR submitted for review.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _submitAr(BuildContext context, ReportItem? report) async {
+    if (report == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No AR periods available.')));
+      return;
+    }
+
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _store.submitArPeriod(report);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${report.periodLabel} AR submitted for review.'),
         ),
       );
     } catch (error) {

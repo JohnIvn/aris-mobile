@@ -10,6 +10,8 @@ import '../models/status.dart';
 import '../services/ar_service.dart';
 import '../services/auth_service.dart';
 import '../services/app_env.dart';
+import '../services/meet_service.dart';
+import '../models/meet_item.dart';
 
 /// Single source of truth for reports. Fetches
 /// `GET {SERVER_URL}/reports/mobile?offset=&limit=` with the backend JWT from
@@ -220,6 +222,211 @@ class ReportsStore extends ChangeNotifier {
           : 'status ${res.statusCode}';
       throw Exception('Could not submit DTR: $message');
     }
+  }
+
+  /// Submits completed Google Meet sessions as an AR for one payroll period.
+  Future<void> submitArPeriod(ReportItem report) async {
+    if (ArService().forReport(report).isNotEmpty || report.arTaskTally > 0) {
+      throw Exception(
+        'An AR has already been submitted for ${report.periodLabel}.',
+      );
+    }
+
+    final base = AppEnv.serverUrl;
+    if (base.isEmpty) {
+      throw StateError('SERVER_URL is not set in .env');
+    }
+    final a = auth;
+    final token = a?.token;
+    if (a == null || token == null || token.isEmpty) {
+      throw Exception('Not signed in.');
+    }
+
+    final meetService = MeetService();
+    meetService.auth = a;
+    if (meetService.items.isEmpty && !meetService.loading) {
+      await meetService.load();
+    }
+    if (meetService.error != null) {
+      throw Exception(meetService.error);
+    }
+
+    final start =
+        report.periodStart ??
+        DateTime(report.shiftDate.year, report.shiftDate.month, 1);
+    final end =
+        report.periodEnd ??
+        (start.day <= 15
+            ? DateTime(start.year, start.month, 15)
+            : DateTime(start.year, start.month + 1, 0));
+
+    final sessions = meetService.items.where((item) {
+      final date = _meetDate(item);
+      return date != null &&
+          !date.isBefore(DateTime(start.year, start.month, start.day)) &&
+          !date.isAfter(DateTime(end.year, end.month, end.day));
+    }).toList();
+
+    if (sessions.isEmpty) {
+      throw Exception(
+        'No completed Google Meet sessions found for ${report.periodLabel}.',
+      );
+    }
+
+    String dateOnly(DateTime date) =>
+        '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+
+    final reference = 'AR-${DateTime.now().millisecondsSinceEpoch}';
+    final period = report.periodLabel;
+    final now = DateTime.now().toIso8601String();
+    final facultyName = a.user?.name ?? 'Faculty';
+    final facultyNumber = a.user?.employeeId ?? '—';
+    final combinedTopics = sessions
+        .map(
+          (item) =>
+              '${item.course}: ${item.overview.isNotEmpty ? item.overview : item.title}',
+        )
+        .join(' · ');
+    final combinedTasks = sessions
+        .map(
+          (item) =>
+              '${item.course}: ${item.actions.isEmpty ? 'Lecture and Discussion, Activity' : item.actions.map((action) => action.task).join(', ')}',
+        )
+        .join(' · ');
+
+    final tables = [
+      for (final item in sessions)
+        () {
+          final date = _meetDate(item);
+          final courseText = item.course.trim();
+          final codeMatch = RegExp(
+            r'([A-Z]{2,10}\s*-?\s*\d+[A-Z]*)',
+            caseSensitive: true,
+          ).firstMatch(courseText);
+          final code =
+              codeMatch?.group(1)?.replaceAll(RegExp(r'\s+'), ' ') ??
+              courseText.split(RegExp(r'\s+')).firstOrNull ??
+              'COURSE';
+          final title = courseText
+              .replaceFirst(
+                RegExp(r'^[A-Z]{2,10}\s*-?\s*\d+[A-Z]*\s*[—:-]?\s*'),
+                '',
+              )
+              .trim();
+          final heldDate = date == null
+              ? ''
+              : '${_monthName(date.month)} ${date.day}, ${date.year}';
+          final time = item.time.trim();
+          final shiftTime = time.isNotEmpty ? time : '08:00 AM–11:00 AM';
+
+          return <String, Object?>{
+            'title': title.isNotEmpty ? '$code — $title' : code,
+            'meta': heldDate,
+            'datesHeld': heldDate,
+            'topics': item.overview.isNotEmpty ? item.overview : item.title,
+            'tasks': item.actions.isEmpty
+                ? 'Lecture and Discussion, Activity'
+                : item.actions.map((action) => action.task).join(', '),
+            'columns': [
+              'Code',
+              'Program, Year & Section',
+              'Units',
+              'Days',
+              'Time',
+              'Campus',
+            ],
+            'rows': [
+              [
+                code,
+                'BSIT',
+                3,
+                date == null ? '' : _dayName(date.weekday),
+                shiftTime,
+                'CONGRESS',
+              ],
+            ],
+          };
+        }(),
+    ];
+
+    final payload = {
+      'id': reference,
+      'reference': reference,
+      'is_revision': false,
+      'type': 'AR',
+      'period': period,
+      'periodStart': dateOnly(start),
+      'periodEnd': dateOnly(end),
+      'units': '${sessions.length} course${sessions.length == 1 ? '' : 's'}',
+      'submitted': now,
+      'status': 'Pending',
+      'stage': 'Checker',
+      'currentStage': 'Checker',
+      'stage_key': 'AR-AP-STG-1',
+      'approval_stage': 'AR-AP-STG-1',
+      'stage_order': 1,
+      'email': a.user?.email,
+      'facultyEmail': a.user?.email,
+      'facultyName': facultyName,
+      'facultyNumber': facultyNumber,
+      'event': 'AR submitted · $period',
+      'record': {
+        'id': null,
+        'report_id': null,
+        'period': period,
+        'reference': reference,
+        'email': a.user?.email,
+        'facultyEmail': a.user?.email,
+        'facultyName': facultyName,
+        'facultyNumber': facultyNumber,
+        'college': 'COLLEGE OF LIBERAL ARTS AND SCIENCES',
+        'tables': tables,
+        'topics': combinedTopics.isNotEmpty
+            ? combinedTopics
+            : 'Course instruction',
+        'tasks': combinedTasks.isNotEmpty
+            ? combinedTasks
+            : 'Lecture and Discussion, Activity',
+        'notes': 'Submitted from ARIS Mobile.',
+        'reviewer': 'Faculty Checker',
+        'reviewedAt': now,
+        'remark': 'Received and queued for review.',
+      },
+    };
+
+    final uri = Uri.parse(
+      '${base.replaceAll(RegExp(r'/+$'), '')}/professor/accomplishment-reports',
+    );
+    final res = await http
+        .post(
+          uri,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401) {
+      await a.signOut();
+      throw Exception('Session expired. Please sign in again.');
+    }
+
+    Object? body;
+    try {
+      body = jsonDecode(res.body);
+    } catch (_) {}
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      final message = body is Map
+          ? (body['error'] ?? body['message'] ?? 'unknown')
+          : 'status ${res.statusCode}';
+      throw Exception('Could not submit AR: $message');
+    }
+
+    await load();
   }
 
   Future<void> _fetch({required bool reset}) async {
@@ -467,6 +674,69 @@ class ReportsStore extends ChangeNotifier {
     ];
     final half = parts.length > 2 ? parts[2] : 'I';
     return '${months[month - 1]} $year $half';
+  }
+
+  DateTime? _meetDate(MeetItem item) {
+    final iso = DateTime.tryParse(item.date);
+    if (iso != null) return iso.toLocal();
+
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    final match = RegExp(r'([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})')
+        .firstMatch(item.date);
+    if (match == null) return null;
+    final month = months.indexWhere(
+      (name) => name.toLowerCase() == match.group(1)!.toLowerCase(),
+    );
+    if (month < 0) return null;
+    return DateTime(
+      int.parse(match.group(3)!),
+      month + 1,
+      int.parse(match.group(2)!),
+    );
+  }
+
+  String _monthName(int month) {
+    const names = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return names[month - 1];
+  }
+
+  String _dayName(int weekday) {
+    const names = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return names[weekday - 1];
   }
 
   // ---- parsing ------------------------------------------------------------
