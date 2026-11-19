@@ -309,12 +309,49 @@ class ReportsStore extends ChangeNotifier {
       grouped.putIfAbsent(month, () => []).add(report);
     }
 
+    // Always include the current month so the active period is visible in the AR list
+    final now = DateTime.now();
+    final curYm =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+    grouped.putIfAbsent(curYm, () => <ReportItem>[]);
+
     final monthly = <ReportItem>[];
     for (final entry in grouped.entries) {
-      final items = entry.value
+      final monthId = 'month-${entry.key}';
+      final parts = entry.key.split('-');
+      final year = int.tryParse(parts[0]) ?? now.year;
+      final month = int.tryParse(parts[1]) ?? now.month;
+      final defaultDate = DateTime(year, month, 1);
+
+      if (entry.value.isEmpty) {
+        // Active month without a submitted accomplishment report yet
+        final monthlyReport = ReportItem(
+          id: monthId,
+          periodLabel: _monthLabel(entry.key),
+          stage: PipelineStage.submitted,
+          dtrStage: 1,
+          dtrStatus: null,
+          updatedAt: defaultDate,
+          rejectionRemarks: null,
+          professorName: auth?.user?.name ?? 'Faculty',
+          professorId: auth?.user?.id ?? '',
+          department: auth?.user?.department ?? '—',
+          position: auth?.user?.position ?? '—',
+          shiftDate: defaultDate,
+          reportNarrative: '',
+          dtrTally: 0.0,
+          arTaskTally: 0,
+          payrollStatus: PayrollStatus.notAvailable,
+        );
+        _periodMonths[monthId] = entry.key;
+        _dtr.putIfAbsent(monthId, () => const []);
+        monthly.add(monthlyReport);
+        continue;
+      }
+
+      final items = List<ReportItem>.from(entry.value)
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       final latest = items.first;
-      final monthId = 'month-${entry.key}';
       final ars = <ArItem>[];
       final dtr = <DtrEntry>[];
       for (final item in items) {
@@ -358,7 +395,8 @@ class ReportsStore extends ChangeNotifier {
       _dtr[monthId] = dtr;
       monthly.add(monthlyReport);
     }
-    monthly.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    // Sort newest month first (e.g. November 2026 before October 2026)
+    monthly.sort((a, b) => b.shiftDate.compareTo(a.shiftDate));
     return monthly;
   }
 

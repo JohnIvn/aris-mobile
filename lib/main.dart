@@ -4,6 +4,7 @@ import 'screens/root_shell.dart';
 import 'screens/sign_in_screen.dart';
 import 'services/auth_scope.dart';
 import 'services/auth_service.dart';
+import 'services/dtr_service.dart';
 import 'theme/app_colors.dart';
 import 'theme/theme_scope.dart';
 import 'theme/theme_service.dart';
@@ -34,6 +35,7 @@ Future<void> main() async {
 
   final authService = AuthService();
   ReportsStore().auth = authService;
+  DtrService().auth = authService;   // ← wire DtrService to auth
   MeetService().auth = authService;
   try {
     await authService.restoreSession();

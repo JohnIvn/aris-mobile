@@ -37,7 +37,9 @@ class MeetListScreen extends StatelessWidget {
 // ─── Embeddable view (used inside RecordsScreen tab) ──────────────────────
 
 class MeetRecordsView extends StatefulWidget {
-  const MeetRecordsView({super.key});
+  final String? selectedMonth; // e.g. "2026-11"
+
+  const MeetRecordsView({super.key, this.selectedMonth});
 
   @override
   State<MeetRecordsView> createState() => _MeetRecordsViewState();
@@ -52,6 +54,62 @@ class _MeetRecordsViewState extends State<MeetRecordsView> {
     if (_service.items.isEmpty && !_service.loading) {
       _service.load();
     }
+  }
+
+  bool _matchesMonth(String dateStr, String ym) {
+    if (dateStr.isEmpty) return true;
+    final parts = ym.split('-');
+    if (parts.length < 2) return true;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    if (year == null || month == null) return true;
+
+    // 1. Try standard ISO parse
+    final parsed = DateTime.tryParse(dateStr);
+    if (parsed != null) {
+      return parsed.year == year && parsed.month == month;
+    }
+
+    // 2. Try matching full month name and year (e.g. "November 15, 2026")
+    const monthNames = [
+      'january',
+      'february',
+      'march',
+      'april',
+      'may',
+      'june',
+      'july',
+      'august',
+      'september',
+      'october',
+      'november',
+      'december',
+    ];
+    final lower = dateStr.toLowerCase();
+    final targetMonth = monthNames[month - 1];
+    return lower.contains(targetMonth) && lower.contains('$year');
+  }
+
+  String _monthLabel(String ym) {
+    final parts = ym.split('-');
+    if (parts.length < 2) return ym;
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+    const fullMonths = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${fullMonths[month - 1]} $year';
   }
 
   @override
@@ -73,8 +131,15 @@ class _MeetRecordsViewState extends State<MeetRecordsView> {
       return _errorState(colors);
     }
 
-    if (_service.items.isEmpty) {
-      return _emptyState(colors);
+    final filtered = widget.selectedMonth == null ||
+            widget.selectedMonth!.isEmpty
+        ? _service.items
+        : _service.items
+            .where((m) => _matchesMonth(m.date, widget.selectedMonth!))
+            .toList();
+
+    if (filtered.isEmpty) {
+      return _emptyState(colors, widget.selectedMonth);
     }
 
     return RefreshIndicator(
@@ -83,7 +148,7 @@ class _MeetRecordsViewState extends State<MeetRecordsView> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          for (final m in _service.items) ...[
+          for (final m in filtered) ...[
             _MeetCard(item: m, colors: colors),
             const SizedBox(height: 12),
           ],
@@ -113,7 +178,11 @@ class _MeetRecordsViewState extends State<MeetRecordsView> {
     );
   }
 
-  Widget _emptyState(AppColors colors) {
+  Widget _emptyState(AppColors colors, [String? selectedMonth]) {
+    final periodText = selectedMonth != null && selectedMonth.isNotEmpty
+        ? ' for ${_monthLabel(selectedMonth)}'
+        : '';
+
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -124,7 +193,7 @@ class _MeetRecordsViewState extends State<MeetRecordsView> {
                 size: 40, color: colors.textSecondary),
             const SizedBox(height: 12),
             Text(
-              'No Meet sessions found.',
+              'No Meet sessions found$periodText.',
               style: TextStyle(color: colors.textSecondary, fontSize: 13),
             ),
           ],

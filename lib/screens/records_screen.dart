@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/dtr_entry.dart';
-import '../models/report_item.dart';
 import '../models/status.dart';
-import '../stores/report_stores.dart';
+import '../services/dtr_service.dart';
+import '../services/meet_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_scope.dart';
 import '../widgets/section_card.dart';
@@ -20,16 +20,22 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-  final _store = ReportsStore();
+  final _dtrService = DtrService();
   final _searchController = TextEditingController();
+
   String _query = '';
   DtrDayStatus? _filterStatus; // null = All
-  String? _selectedReportId;
+
+  List<String> _availableMonths = [];
+  String _selectedMonth = '';
+  List<DtrEntry> _entries = [];
+  bool _loading = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    if (_store.reports.isEmpty) _store.load();
+    _initData();
   }
 
   @override
@@ -38,21 +44,133 @@ class _RecordsScreenState extends State<RecordsScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _store,
-      builder: (context, _) => _content(context),
-    );
+  String _currentMonth() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
   }
 
-  Widget _content(BuildContext context) {
-    final colors = ThemeScope.colorsOf(context);
+  /// Discovers available months from /biometrics/transactions, exactly like aris-app.
+  Future<void> _initData() async {
+    final current = _currentMonth();
+    setState(() {
+      _selectedMonth = current;
+      _loading = true;
+      _error = null;
+    });
 
-    final ReportItem? report = _selectedReportId == null
-        ? (_store.reports.isEmpty ? null : _store.reports.first)
-        : _store.byId(_selectedReportId!) ??
-              (_store.reports.isEmpty ? null : _store.reports.first);
+    try {
+      final months = await _dtrService.fetchAvailableMonths();
+      final monthSet = Set<String>.from(months);
+      monthSet.add(current);
+
+      // Also gather any months represented by Google Meet records
+      final meetSvc = MeetService();
+      if (meetSvc.items.isEmpty && !meetSvc.loading) {
+        try {
+          await meetSvc.load();
+        } catch (_) {}
+      }
+      for (final m in meetSvc.items) {
+        final ym = _extractYmFromDate(m.date);
+        if (ym != null) monthSet.add(ym);
+      }
+
+      final sortedMonths = monthSet.toList()
+        ..sort((a, b) => b.compareTo(a));
+
+      final activeMonth = sortedMonths.contains(current)
+          ? current
+          : sortedMonths.first;
+
+      if (!mounted) return;
+      setState(() {
+        _availableMonths = sortedMonths;
+        _selectedMonth = activeMonth;
+      });
+
+      await _fetchPunchesForMonth(activeMonth);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _availableMonths = [current];
+        _selectedMonth = current;
+      });
+      await _fetchPunchesForMonth(current);
+    }
+  }
+
+  String? _extractYmFromDate(String dateStr) {
+    if (dateStr.isEmpty) return null;
+    final dt = DateTime.tryParse(dateStr);
+    if (dt != null) {
+      return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}';
+    }
+    const monthNames = [
+      'january',
+      'february',
+      'march',
+      'april',
+      'may',
+      'june',
+      'july',
+      'august',
+      'september',
+      'october',
+      'november',
+      'december'
+    ];
+    final lower = dateStr.toLowerCase();
+    for (var i = 0; i < monthNames.length; i++) {
+      if (lower.contains(monthNames[i])) {
+        final match = RegExp(r'\b(20\d\d)\b').firstMatch(dateStr);
+        final year = match?.group(1) ?? '${DateTime.now().year}';
+        final month = (i + 1).toString().padLeft(2, '0');
+        return '$year-$month';
+      }
+    }
+    return null;
+  }
+
+  /// Fetches DTR records for the given YYYY-MM from /biometrics/transactions.
+  Future<void> _fetchPunchesForMonth(String monthStr) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final parts = monthStr.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final lastDay = DateTime(year, month + 1, 0).day;
+
+      final startDate =
+          '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-01';
+      final endDate =
+          '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-${lastDay.toString().padLeft(2, '0')}';
+
+      final result = await _dtrService.fetchEntries(
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _entries = result;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = ThemeScope.colorsOf(context);
 
     return DefaultTabController(
       length: 2,
@@ -76,14 +194,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
                         letterSpacing: -0.3,
                       ),
                     ),
-                    if (report != null) ...[
+                    if (_availableMonths.isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      _periodSelector(colors, report),
+                      _periodSelector(colors),
                     ],
                   ],
                 ),
               )
-            else if (report != null)
+            else if (_availableMonths.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
                 child: Row(
@@ -97,7 +215,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _periodSelector(colors, report),
+                    _periodSelector(colors),
                   ],
                 ),
               ),
@@ -113,10 +231,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  _dtrTab(context, report),
-                  report == null
-                      ? _emptyReport(colors)
-                      : const MeetRecordsView(),
+                  _dtrTab(context),
+                  MeetRecordsView(selectedMonth: _selectedMonth),
                 ],
               ),
             ),
@@ -126,10 +242,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
     );
   }
 
-  Widget _periodSelector(AppColors colors, ReportItem selected) {
+  Widget _periodSelector(AppColors colors) {
     return DropdownButtonHideUnderline(
       child: DropdownButton<String>(
-        value: selected.id,
+        value: _selectedMonth.isNotEmpty ? _selectedMonth : null,
         isDense: true,
         icon: Icon(Icons.keyboard_arrow_down, color: colors.accentActive),
         style: TextStyle(
@@ -139,45 +255,70 @@ class _RecordsScreenState extends State<RecordsScreen> {
         ),
         dropdownColor: colors.surface,
         items: [
-          for (final report in _store.reports)
+          for (final m in _availableMonths)
             DropdownMenuItem<String>(
-              value: report.id,
-              child: Text(report.periodLabel),
+              value: m,
+              child: Text(_monthLabel(m)),
             ),
         ],
-        onChanged: (id) {
-          if (id == null) return;
+        onChanged: (val) {
+          if (val == null || val == _selectedMonth) return;
           setState(() {
-            _selectedReportId = id;
+            _selectedMonth = val;
             _query = '';
             _filterStatus = null;
             _searchController.clear();
           });
+          _fetchPunchesForMonth(val);
         },
       ),
     );
   }
 
-  Widget _dtrTab(BuildContext context, ReportItem? report) {
+  Widget _dtrTab(BuildContext context) {
     final colors = ThemeScope.colorsOf(context);
-    final allEntries = report == null
-        ? const <DtrEntry>[]
-        : _store.dtrEntriesOf(report);
 
-    // Attendance summary always reflects the full period, regardless
-    // of what the search/filter is currently narrowing the list to.
-    final present = allEntries
+    if (_loading && _entries.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(48),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_error != null && _entries.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        child: Column(
+          children: [
+            Text(
+              'Could not load DTR records.\n$_error',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.error, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () => _fetchPunchesForMonth(_selectedMonth),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final present = _entries
         .where((e) => e.status == DtrDayStatus.present)
         .length;
-    final late = allEntries.where((e) => e.status == DtrDayStatus.late).length;
-    final absent = allEntries
+    final late = _entries.where((e) => e.status == DtrDayStatus.late).length;
+    final absent = _entries
         .where((e) => e.status == DtrDayStatus.absent)
         .length;
-    final missing = allEntries
+    final missing = _entries
         .where((e) => e.status == DtrDayStatus.missing)
         .length;
 
-    final entries = allEntries.where((e) {
+    final filtered = _entries.where((e) {
       final matchesQuery =
           _query.isEmpty || _shortDate(e.date).toLowerCase().contains(_query);
       final matchesFilter = _filterStatus == null || e.status == _filterStatus;
@@ -185,121 +326,83 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }).toList();
 
     return RefreshIndicator(
-      onRefresh: _store.load,
+      onRefresh: () => _fetchPunchesForMonth(_selectedMonth),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
         children: [
-          if (report == null)
-            _emptyReport(colors)
-          else ...[
-            _summaryCard(
-              colors,
-              total: allEntries.length,
-              present: present,
-              late: late,
-              absent: absent,
-              missing: missing,
-            ),
-            _searchField(
-              colors,
-              controller: _searchController,
-              hint: 'Search by date (e.g. Nov 2)',
-              onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
-              onClear: () => setState(() => _query = ''),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 38,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
+          _summaryCard(
+            colors,
+            total: _entries.length,
+            present: present,
+            late: late,
+            absent: absent,
+            missing: missing,
+          ),
+          _searchField(
+            colors,
+            controller: _searchController,
+            hint: 'Search by date (e.g. Nov 2)',
+            onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+            onClear: () => setState(() => _query = ''),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 38,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _filterChip(
+                  colors,
+                  label: 'All',
+                  selected: _filterStatus == null,
+                  onTap: () => setState(() => _filterStatus = null),
+                ),
+                const SizedBox(width: 8),
+                for (final status in DtrDayStatus.values) ...[
                   _filterChip(
                     colors,
-                    label: 'All',
-                    selected: _filterStatus == null,
-                    onTap: () => setState(() => _filterStatus = null),
+                    label: _statusLabel(status),
+                    selected: _filterStatus == status,
+                    onTap: () => setState(() => _filterStatus = status),
                   ),
                   const SizedBox(width: 8),
-                  for (final status in DtrDayStatus.values) ...[
-                    _filterChip(
-                      colors,
-                      label: _statusLabel(status),
-                      selected: _filterStatus == status,
-                      onTap: () => setState(() => _filterStatus = status),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 16),
-            SectionCard(
-              title: 'Daily Records',
-              child: entries.isEmpty
-                  ? Text(
-                      allEntries.isEmpty
-                          ? 'No DTR entries for this period yet.'
-                          : 'No DTR entries match your search or filter.',
-                      style: TextStyle(
-                        color: colors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    )
-                  : Column(
-                      children: [
-                        for (var i = 0; i < entries.length; i++) ...[
-                          if (i > 0) const SizedBox(height: 8),
-                          _entryRow(colors, entries[i]),
-                        ],
-                      ],
+          ),
+          const SizedBox(height: 16),
+          SectionCard(
+            title: 'Daily Records',
+            child: filtered.isEmpty
+                ? Text(
+                    _entries.isEmpty
+                        ? 'No DTR entries for this period yet.'
+                        : 'No DTR entries match your search or filter.',
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 13,
                     ),
+                  )
+                : Column(
+                    children: [
+                      for (var i = 0; i < filtered.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 8),
+                        _entryRow(colors, filtered[i]),
+                      ],
+                    ],
+                  ),
+          ),
+          Text(
+            'Records are sourced from biometrics and cannot be edited '
+            'directly. Tap an entry to report a discrepancy.',
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 12.5,
+              height: 1.4,
             ),
-            Text(
-              'Records are sourced from biometrics and cannot be edited '
-              'directly. Tap an entry to report a discrepancy.',
-              style: TextStyle(
-                color: colors.textSecondary,
-                fontSize: 12.5,
-                height: 1.4,
-              ),
-            ),
-          ],
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _emptyReport(AppColors colors) {
-    if (_store.loading) {
-      return const Padding(
-        padding: EdgeInsets.all(48),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (_store.error != null) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          children: [
-            Text(
-              'Could not load DTR.\n${_store.error}',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: colors.error, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton(onPressed: _store.load, child: const Text('Retry')),
-          ],
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Center(
-        child: Text(
-          'No reports yet.',
-          style: TextStyle(color: colors.textSecondary, fontSize: 13),
-        ),
       ),
     );
   }
@@ -597,8 +700,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
-  /// Same colors the old table icons used: present = success,
-  /// late/missing = warning, absent = error.
   StatusColorKind _kindFor(DtrDayStatus status) {
     switch (status) {
       case DtrDayStatus.present:
@@ -644,4 +745,26 @@ class _RecordsScreenState extends State<RecordsScreen> {
   String _month(DateTime d) => _months[d.month - 1];
 
   String _shortDate(DateTime d) => '${_month(d)} ${d.day}';
+
+  String _monthLabel(String ym) {
+    final parts = ym.split('-');
+    if (parts.length < 2) return ym;
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+    const fullMonths = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${fullMonths[month - 1]} $year';
+  }
 }
