@@ -32,6 +32,8 @@ class ReportItem {
   final PayrollStatus payrollStatus;
   final DateTime? payrollAvailableAt;
   final DateTime? payrollReceivedAt;
+  final DateTime? periodStart;
+  final DateTime? periodEnd;
 
   const ReportItem({
     required this.id,
@@ -52,6 +54,8 @@ class ReportItem {
     required this.payrollStatus,
     this.payrollAvailableAt,
     this.payrollReceivedAt,
+    this.periodStart,
+    this.periodEnd,
   });
 
   bool get isDisapproved =>

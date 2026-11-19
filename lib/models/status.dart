@@ -5,6 +5,7 @@
 /// all three admins (Department Secretary, HR, Accounting) have
 /// verified, which is also what unlocks [PayrollStatus.available].
 enum PipelineStage {
+  notSubmitted,
   draft,
   submitted,
   department,
@@ -17,6 +18,8 @@ enum PipelineStage {
 extension PipelineStageX on PipelineStage {
   String get label {
     switch (this) {
+      case PipelineStage.notSubmitted:
+        return 'Not submitted';
       case PipelineStage.draft:
         return 'Draft';
       case PipelineStage.submitted:
@@ -38,6 +41,8 @@ extension PipelineStageX on PipelineStage {
   /// read `colors.<field>` via this instead of hardcoding a color.
   StatusColorKind get colorKind {
     switch (this) {
+      case PipelineStage.notSubmitted:
+        return StatusColorKind.neutral;
       case PipelineStage.completed:
         return StatusColorKind.success;
       case PipelineStage.rejected:

@@ -57,7 +57,8 @@ class _SubmitScreenState extends State<SubmitScreen> {
                 colors,
                 icon: Icons.access_time_rounded,
                 title: 'DTR',
-                description: 'Submit all attendance records for one month.',
+                description:
+                    'Submit all attendance records for one half-month period.',
                 enabled: true,
                 onTap: () => _submitDtr(context, report),
               ),
@@ -76,7 +77,7 @@ class _SubmitScreenState extends State<SubmitScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'DTR month',
+                        'DTR period',
                         style: TextStyle(
                           color: colors.textSecondary,
                           fontSize: 12,
@@ -151,10 +152,7 @@ class _SubmitScreenState extends State<SubmitScreen> {
         ),
         title: Text(
           title,
-          style: TextStyle(
-            color: colors.text,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
         ),
         subtitle: Text(description),
         trailing: enabled
@@ -168,7 +166,7 @@ class _SubmitScreenState extends State<SubmitScreen> {
   Future<void> _submitDtr(BuildContext context, ReportItem? report) async {
     if (report == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No monthly DTR records available.')),
+        const SnackBar(content: Text('No DTR periods available.')),
       );
       return;
     }
@@ -181,19 +179,18 @@ class _SubmitScreenState extends State<SubmitScreen> {
     }
 
     setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await _store.submitDtrMonth(report);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('${report.periodLabel} DTR submitted for review.'),
         ),
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      messenger.showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

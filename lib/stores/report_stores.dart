@@ -24,6 +24,8 @@ class ReportsStore extends ChangeNotifier {
 
   /// AR-AP-STG-1..4
   static const stageLabels = ['Pending', 'Department', 'HR', 'Accounting'];
+  static String stageLabel(int stage) =>
+      stage == 0 ? 'Not submitted' : stageLabels[stage - 1];
 
   /// Set once, before runApp, with the SAME instance that signs in:
   /// `ReportsStore().auth = authService;`
@@ -47,7 +49,12 @@ class ReportsStore extends ChangeNotifier {
   String? get error => _error;
 
   /// Backend stage of a report: 1 pending, 2 department, 3 HR, 4 accounting.
-  int stageOf(ReportItem r) => _stageNo[r.id] ?? 1;
+  int stageOf(ReportItem r) {
+    final arCount = ArService().forReport(r).length;
+    final dtrCount = dtrEntriesOf(r).length;
+    if (arCount == 0 && dtrCount == 0 && r.dtrStatus == null) return 0;
+    return _stageNo[r.id] ?? 1;
+  }
 
   /// Daily DTR rows of a report, oldest first.
   List<DtrEntry> dtrEntriesOf(ReportItem r) => _dtr[r.id] ?? const [];
@@ -140,12 +147,14 @@ class ReportsStore extends ChangeNotifier {
           payrollStatus: PayrollStatus.received,
           payrollAvailableAt: r.payrollAvailableAt,
           payrollReceivedAt: r.payrollReceivedAt,
+          periodStart: r.periodStart,
+          periodEnd: r.periodEnd,
         );
       notifyListeners();
     }
   }
 
-  /// Submits every DTR row in [report]'s calendar month for review.
+  /// Submits every DTR row in [report]'s payroll period for review.
   Future<void> submitDtrMonth(ReportItem report) async {
     final base = AppEnv.serverUrl;
     if (base.isEmpty) {
@@ -161,10 +170,17 @@ class ReportsStore extends ChangeNotifier {
     if (entries.isEmpty) {
       throw Exception('There are no DTR records for ${report.periodLabel}.');
     }
-    final year = report.shiftDate.year;
-    final month = report.shiftDate.month;
-    final firstDay = DateTime(year, month, 1);
-    final lastDay = DateTime(year, month + 1, 0);
+    final year = report.periodStart?.year ?? report.shiftDate.year;
+    final month = report.periodStart?.month ?? report.shiftDate.month;
+    final isFirstHalf =
+        report.periodLabel.toUpperCase().contains(' I') ||
+        report.periodStart?.day == 1;
+    final firstDay = report.periodStart ?? DateTime(year, month, 1);
+    final lastDay =
+        report.periodEnd ??
+        (isFirstHalf
+            ? DateTime(year, month, 15)
+            : DateTime(year, month + 1, 0));
     String dateOnly(DateTime date) =>
         '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
@@ -280,7 +296,7 @@ class ReportsStore extends ChangeNotifier {
 
       if (reset) {
         _weeklyCache = parsed;
-        _reports = _groupByMonth(parsed);
+        _reports = _groupByPeriod(parsed);
         _offset = rows.length;
       } else {
         final known = _weeklyCache.map((r) => r.id).toSet();
@@ -288,7 +304,7 @@ class ReportsStore extends ChangeNotifier {
           ..._weeklyCache,
           ...parsed.where((r) => !known.contains(r.id)),
         ];
-        _reports = _groupByMonth(_weeklyCache);
+        _reports = _groupByPeriod(_weeklyCache);
         _offset += rows.length;
       }
       _hasMore = rows.length >= _pageSize;
@@ -302,33 +318,30 @@ class ReportsStore extends ChangeNotifier {
     }
   }
 
-  List<ReportItem> _groupByMonth(List<ReportItem> reports) {
+  List<ReportItem> _groupByPeriod(List<ReportItem> reports) {
     final grouped = <String, List<ReportItem>>{};
     for (final report in reports) {
-      final month = _periodMonths[report.id] ?? _monthKey(report.shiftDate);
-      grouped.putIfAbsent(month, () => []).add(report);
+      final period = _periodKey(report);
+      grouped.putIfAbsent(period, () => []).add(report);
     }
 
-    // Always include the current month so the active period is visible in the AR list
     final now = DateTime.now();
     final curYm =
         '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
-    grouped.putIfAbsent(curYm, () => <ReportItem>[]);
+    grouped.putIfAbsent('$curYm-I', () => <ReportItem>[]);
+    grouped.putIfAbsent('$curYm-II', () => <ReportItem>[]);
 
-    final monthly = <ReportItem>[];
+    final periods = <ReportItem>[];
     for (final entry in grouped.entries) {
-      final monthId = 'month-${entry.key}';
-      final parts = entry.key.split('-');
-      final year = int.tryParse(parts[0]) ?? now.year;
-      final month = int.tryParse(parts[1]) ?? now.month;
-      final defaultDate = DateTime(year, month, 1);
+      final periodId = 'period-${entry.key}';
+      final range = _periodRange(entry.key);
+      final defaultDate = range.$1;
 
       if (entry.value.isEmpty) {
-        // Active month without a submitted accomplishment report yet
-        final monthlyReport = ReportItem(
-          id: monthId,
-          periodLabel: _monthLabel(entry.key),
-          stage: PipelineStage.submitted,
+        final activeReport = ReportItem(
+          id: periodId,
+          periodLabel: _periodLabel(entry.key),
+          stage: PipelineStage.notSubmitted,
           dtrStage: 1,
           dtrStatus: null,
           updatedAt: defaultDate,
@@ -342,10 +355,12 @@ class ReportsStore extends ChangeNotifier {
           dtrTally: 0.0,
           arTaskTally: 0,
           payrollStatus: PayrollStatus.notAvailable,
+          periodStart: range.$1,
+          periodEnd: range.$2,
         );
-        _periodMonths[monthId] = entry.key;
-        _dtr.putIfAbsent(monthId, () => const []);
-        monthly.add(monthlyReport);
+        _periodMonths[periodId] = entry.key;
+        _dtr.putIfAbsent(periodId, () => const []);
+        periods.add(activeReport);
         continue;
       }
 
@@ -356,21 +371,27 @@ class ReportsStore extends ChangeNotifier {
       final dtr = <DtrEntry>[];
       for (final item in items) {
         ars.addAll(ArService().forReport(item));
-        dtr.addAll(dtrEntriesOf(item));
+        dtr.addAll(
+          dtrEntriesOf(item).where(
+            (e) => !e.date.isBefore(range.$1) && !e.date.isAfter(range.$2),
+          ),
+        );
       }
-      final rejectedItem =
-          items.where((r) => r.stage == PipelineStage.rejected).firstOrNull;
-      final stage =
-          rejectedItem != null ? PipelineStage.rejected : latest.stage;
+      final rejectedItem = items
+          .where((r) => r.stage == PipelineStage.rejected)
+          .firstOrNull;
+      final stage = rejectedItem != null
+          ? PipelineStage.rejected
+          : latest.stage;
       final rejectionRemarks =
           rejectedItem?.rejectionRemarks ?? latest.rejectionRemarks;
       final payrollStatus = rejectedItem != null
           ? PayrollStatus.disapproved
           : latest.payrollStatus;
 
-      final monthlyReport = ReportItem(
-        id: monthId,
-        periodLabel: _monthLabel(entry.key),
+      final periodReport = ReportItem(
+        id: periodId,
+        periodLabel: _periodLabel(entry.key),
         stage: stage,
         dtrStage: latest.dtrStage,
         dtrStatus: latest.dtrStatus,
@@ -380,32 +401,56 @@ class ReportsStore extends ChangeNotifier {
         professorId: latest.professorId,
         department: latest.department,
         position: latest.position,
-        shiftDate: items
-            .map((r) => r.shiftDate)
-            .reduce((a, b) => a.isBefore(b) ? a : b),
+        shiftDate: range.$1,
         reportNarrative: latest.reportNarrative,
         dtrTally: items.fold(0.0, (sum, r) => sum + r.dtrTally),
         arTaskTally: ars.length,
         payrollStatus: payrollStatus,
         payrollAvailableAt: latest.payrollAvailableAt,
         payrollReceivedAt: latest.payrollReceivedAt,
+        periodStart: range.$1,
+        periodEnd: range.$2,
       );
-      _periodMonths[monthId] = entry.key;
-      ArService().setForReport(monthId, ars);
-      _dtr[monthId] = dtr;
-      monthly.add(monthlyReport);
+      _periodMonths[periodId] = entry.key;
+      ArService().setForReport(periodId, ars);
+      _dtr[periodId] = dtr;
+      periods.add(periodReport);
     }
-    // Sort newest month first (e.g. November 2026 before October 2026)
-    monthly.sort((a, b) => b.shiftDate.compareTo(a.shiftDate));
-    return monthly;
+    periods.sort((a, b) => b.periodStart!.compareTo(a.periodStart!));
+    return periods;
   }
 
   String _monthKey(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
 
-  String _monthLabel(String key) {
+  String _periodKey(ReportItem report) {
+    final mapped = _periodMonths[report.id];
+    if (mapped != null) return mapped;
+    final periodStart = report.periodStart ?? report.shiftDate;
+    final month = _monthKey(periodStart);
+    final half =
+        periodStart.day <= 15 || report.periodLabel.toUpperCase().contains(' I')
+        ? 'I'
+        : 'II';
+    return '$month-$half';
+  }
+
+  (DateTime, DateTime) _periodRange(String key) {
     final parts = key.split('-');
-    final date = DateTime(int.parse(parts[0]), int.parse(parts[1]));
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+    final firstHalf = parts.length < 3 || parts[2] == 'I';
+    final start = DateTime(year, month, firstHalf ? 1 : 16);
+    final end = firstHalf
+        ? DateTime(year, month, 15)
+        : DateTime(year, month + 1, 0);
+    return (start, end);
+  }
+
+  String _periodLabel(String key) {
+    final parts = key.split('-');
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
     const months = [
       'January',
       'February',
@@ -420,7 +465,8 @@ class ReportsStore extends ChangeNotifier {
       'November',
       'December',
     ];
-    return '${months[date.month - 1]} ${date.year}';
+    final half = parts.length > 2 ? parts[2] : 'I';
+    return '${months[month - 1]} $year $half';
   }
 
   // ---- parsing ------------------------------------------------------------
@@ -498,7 +544,14 @@ class ReportsStore extends ChangeNotifier {
   ReportItem _parse(Map<String, dynamic> j) {
     final id = _s(j['id']);
     final updatedAt = _dt(j['updatedAt'], DateTime.now());
-    _periodMonths[id] = _monthKey(_dt(j['periodStart'], updatedAt));
+    final periodStart = _dt(j['periodStart'], updatedAt);
+    final periodEndFallback = periodStart.day <= 15
+        ? DateTime(periodStart.year, periodStart.month, 15)
+        : DateTime(periodStart.year, periodStart.month + 1, 0);
+    final periodEnd = _dt(j['periodEnd'], periodEndFallback);
+    final periodHalf = periodStart.day <= 15 ? 'I' : 'II';
+    final periodKey = '${_monthKey(periodStart)}-$periodHalf';
+    _periodMonths[id] = periodKey;
     final stageNo = _stageNumber(_s(j['stage'])).clamp(1, 4);
     _stageNo[id] = stageNo;
     final dtrStage = _stageNumber(
@@ -573,9 +626,9 @@ class ReportsStore extends ChangeNotifier {
         ? updatedAt
         : ars.map((a) => a.classDate).reduce((a, b) => a.isBefore(b) ? a : b);
 
-    final subStatus =
-        _s(j['submission_status'] ?? j['status']).toLowerCase();
-    final isDisapproved = subStatus == 'disapproved' ||
+    final subStatus = _s(j['submission_status'] ?? j['status']).toLowerCase();
+    final isDisapproved =
+        subStatus == 'disapproved' ||
         subStatus == 'rejected' ||
         dtrStatusValue.toLowerCase() == 'disapproved' ||
         dtrStatusValue.toLowerCase() == 'rejected' ||
@@ -584,8 +637,8 @@ class ReportsStore extends ChangeNotifier {
 
     final rejectionRemarks = isDisapproved
         ? (_s(j['submission_notes']).isNotEmpty
-            ? _s(j['submission_notes'])
-            : _s(j['remarks'], 'Returned for correction'))
+              ? _s(j['submission_notes'])
+              : _s(j['remarks'], 'Returned for correction'))
         : null;
 
     // Disapproved reports are blocked from payroll; received wins over available;
@@ -598,9 +651,16 @@ class ReportsStore extends ChangeNotifier {
         ? PayrollStatus.available
         : PayrollStatus.notAvailable;
 
+    final rawPeriodLabel = _s(j['periodLabel']);
+    final normalizedPeriodLabel =
+        rawPeriodLabel.toUpperCase().contains(' I') ||
+            rawPeriodLabel.toUpperCase().contains(' II')
+        ? rawPeriodLabel
+        : _periodLabel(periodKey);
+
     return ReportItem(
       id: id,
-      periodLabel: _s(j['periodLabel']),
+      periodLabel: normalizedPeriodLabel,
       stage: isDisapproved ? PipelineStage.rejected : _pipelineStage(stageNo),
       dtrStage: dtrStage,
       dtrStatus: dtrStatusValue.isNotEmpty
@@ -619,6 +679,8 @@ class ReportsStore extends ChangeNotifier {
       dtrTally: dtrHours,
       arTaskTally: ars.length,
       payrollStatus: payrollStatus,
+      periodStart: periodStart,
+      periodEnd: periodEnd,
     );
   }
 }

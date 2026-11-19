@@ -49,11 +49,18 @@ class _RecordsScreenState extends State<RecordsScreen> {
     return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
   }
 
+  String _currentPeriod() {
+    final now = DateTime.now();
+    final half = now.day <= 15 ? 'I' : 'II';
+    return '${_currentMonth()}-$half';
+  }
+
   /// Discovers available months from /biometrics/transactions, exactly like aris-app.
   Future<void> _initData() async {
     final current = _currentMonth();
+    final currentPeriod = _currentPeriod();
     setState(() {
-      _selectedMonth = current;
+      _selectedMonth = currentPeriod;
       _loading = true;
       _error = null;
     });
@@ -75,27 +82,32 @@ class _RecordsScreenState extends State<RecordsScreen> {
         if (ym != null) monthSet.add(ym);
       }
 
-      final sortedMonths = monthSet.toList()
-        ..sort((a, b) => b.compareTo(a));
+      final periodSet = <String>{'$current-I', '$current-II'};
+      for (final ym in monthSet) {
+        periodSet.add('$ym-I');
+        periodSet.add('$ym-II');
+      }
 
-      final activeMonth = sortedMonths.contains(current)
-          ? current
-          : sortedMonths.first;
+      final sortedPeriods = periodSet.toList()..sort((a, b) => b.compareTo(a));
+
+      final activePeriod = sortedPeriods.contains(currentPeriod)
+          ? currentPeriod
+          : sortedPeriods.first;
 
       if (!mounted) return;
       setState(() {
-        _availableMonths = sortedMonths;
-        _selectedMonth = activeMonth;
+        _availableMonths = sortedPeriods;
+        _selectedMonth = activePeriod;
       });
 
-      await _fetchPunchesForMonth(activeMonth);
+      await _fetchPunchesForMonth(activePeriod);
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _availableMonths = [current];
-        _selectedMonth = current;
+        _availableMonths = ['$current-I', '$current-II'];
+        _selectedMonth = currentPeriod;
       });
-      await _fetchPunchesForMonth(current);
+      await _fetchPunchesForMonth(currentPeriod);
     }
   }
 
@@ -117,7 +129,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       'september',
       'october',
       'november',
-      'december'
+      'december',
     ];
     final lower = dateStr.toLowerCase();
     for (var i = 0; i < monthNames.length; i++) {
@@ -142,10 +154,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
       final parts = monthStr.split('-');
       final year = int.parse(parts[0]);
       final month = int.parse(parts[1]);
-      final lastDay = DateTime(year, month + 1, 0).day;
+      final half = parts.length > 2 ? parts[2] : 'I';
+      final lastDay = half == 'I' ? 15 : DateTime(year, month + 1, 0).day;
 
       final startDate =
-          '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-01';
+          '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-${half == 'I' ? '01' : '16'}';
       final endDate =
           '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-${lastDay.toString().padLeft(2, '0')}';
 
@@ -256,10 +269,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
         dropdownColor: colors.surface,
         items: [
           for (final m in _availableMonths)
-            DropdownMenuItem<String>(
-              value: m,
-              child: Text(_monthLabel(m)),
-            ),
+            DropdownMenuItem<String>(value: m, child: Text(_monthLabel(m))),
         ],
         onChanged: (val) {
           if (val == null || val == _selectedMonth) return;
@@ -379,10 +389,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                     _entries.isEmpty
                         ? 'No DTR entries for this period yet.'
                         : 'No DTR entries match your search or filter.',
-                    style: TextStyle(
-                      color: colors.textSecondary,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: colors.textSecondary, fontSize: 13),
                   )
                 : Column(
                     children: [
@@ -765,6 +772,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       'November',
       'December',
     ];
-    return '${fullMonths[month - 1]} $year';
+    final half = parts.length > 2 ? ' ${parts[2]}' : '';
+    return '${fullMonths[month - 1]} $year$half';
   }
 }

@@ -205,6 +205,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   const SizedBox(width: 8),
                   _filterChip(
                     colors,
+                    label: 'Not submitted',
+                    selected: _filterStage == 0,
+                    onTap: () => setState(() => _filterStage = 0),
+                  ),
+                  const SizedBox(width: 8),
+                  _filterChip(
+                    colors,
                     label: 'Disapproved',
                     selected: _filterStage == -1,
                     onTap: () => setState(() => _filterStage = -1),
@@ -318,20 +325,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
   /// (pending, department, HR, accounting).
   Widget _summaryCard(AppColors colors, List<ReportItem> all) {
     final total = all.length;
-    final counts = List<int>.filled(4, 0);
+    final counts = List<int>.filled(5, 0);
     for (final r in all) {
-      counts[_store.stageOf(r) - 1]++;
+      final stage = _store.stageOf(r);
+      counts[stage == 0 ? 0 : stage]++;
     }
     String pct(int n) => '${(n * 100 / total).round()}%';
 
     final dots = <Color>[
+      colors.textSecondary,
       colors.textSecondary,
       colors.warning,
       colors.info,
       colors.success,
     ];
     final segments = <(int, Color)>[
-      for (var i = 0; i < 4; i++)
+      for (var i = 0; i < 5; i++)
         if (counts[i] > 0) (counts[i], dots[i]),
     ];
 
@@ -364,11 +373,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (var i = 0; i < 4; i++)
+              for (var i = 0; i < 5; i++)
                 Expanded(
                   child: _summaryStat(
                     colors,
-                    ReportsStore.stageLabels[i],
+                    i == 0 ? 'Not submitted' : ReportsStore.stageLabels[i - 1],
                     counts[i],
                     pct(counts[i]),
                     dots[i],
@@ -469,6 +478,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final stage = s.total == 0
         ? _store.stageOf(report)
         : ((combinedPercent / 100) * 4).ceil().clamp(1, 4);
+    final notSubmitted = _store.stageOf(report) == 0;
 
     return SectionCard(
       padding: EdgeInsets.zero,
@@ -527,10 +537,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       child: StatusBadge(
                         label: report.isDisapproved
                             ? 'Disapproved'
-                            : ReportsStore
-                                .stageLabels[_store.stageOf(report) - 1],
+                            : ReportsStore.stageLabel(_store.stageOf(report)),
                         kind: report.isDisapproved
                             ? StatusColorKind.error
+                            : notSubmitted
+                            ? StatusColorKind.neutral
                             : _store.stageOf(report) == 4
                             ? StatusColorKind.success
                             : StatusColorKind.info,
@@ -556,7 +567,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.error_outline, size: 16, color: colors.error),
+                        Icon(
+                          Icons.error_outline,
+                          size: 16,
+                          color: colors.error,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -604,10 +619,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       report.isDisapproved
                           ? 'Action Required · Disapproved'
                           : s.total == 0
-                          ? 'Stage $stage of 4 · ${ReportsStore.stageLabels[stage - 1]}'
+                          ? notSubmitted
+                                ? 'Stage 0 of 4 · Not submitted'
+                                : 'Stage $stage of 4 · ${ReportsStore.stageLabels[stage - 1]}'
                           : '$combinedPercent% average · ${s.total} ARs + DTR',
                       style: TextStyle(
-                        color: report.isDisapproved ? colors.error : colors.text,
+                        color: report.isDisapproved
+                            ? colors.error
+                            : colors.text,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
@@ -625,8 +644,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           decoration: BoxDecoration(
                             color: report.isDisapproved
                                 ? (n == 1
-                                    ? colors.error
-                                    : colors.border.withValues(alpha: 0.5))
+                                      ? colors.error
+                                      : colors.border.withValues(alpha: 0.5))
                                 : n <= stage
                                 ? (stage == 4
                                       ? colors.success

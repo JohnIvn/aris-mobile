@@ -76,7 +76,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Widget> _cards(AppColors colors, ReportItem latest) {
     final stage = _store.stageOf(latest);
-    final stageKind = stage == 4
+    final stageKind = stage == 0
+        ? StatusColorKind.neutral
+        : stage == 4
         ? StatusColorKind.success
         : StatusColorKind.info;
     final next = _nextAction(latest, stage);
@@ -125,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _statusRow(
               colors,
               'AR & DTR',
-              ReportsStore.stageLabels[stage - 1],
+              ReportsStore.stageLabel(stage),
               stageKind,
             ),
             Divider(
@@ -441,6 +443,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return switch (stage) {
+      0 => _NextAction(
+        Icons.add_circle_outline,
+        'Not submitted — no AR or DTR data',
+        (c) => c.textSecondary,
+      ),
       1 => _NextAction(
         Icons.hourglass_empty,
         'Submitted — awaiting verification',
@@ -456,10 +463,15 @@ class _HomeScreenState extends State<HomeScreen> {
         'Awaiting HR verification',
         (c) => c.warning,
       ),
-      _ => _NextAction(
+      4 => _NextAction(
         Icons.hourglass_empty,
         'Awaiting Accounting verification',
         (c) => c.warning,
+      ),
+      _ => _NextAction(
+        Icons.add_circle_outline,
+        'Not submitted',
+        (c) => c.textSecondary,
       ),
     };
   }

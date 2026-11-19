@@ -128,8 +128,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    r.rejectionRemarks != null &&
-                            r.rejectionRemarks!.isNotEmpty
+                    r.rejectionRemarks != null && r.rejectionRemarks!.isNotEmpty
                         ? r.rejectionRemarks!
                         : 'This submission has been disapproved and returned to you for correction.',
                     style: TextStyle(
@@ -283,10 +282,12 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     final stage = report.dtrStage.clamp(1, 4);
     final labels = ReportsStore.stageLabels;
     final isSubmitted = report.dtrStatus != null;
-    final isDisapproved = report.dtrStatus == 'disapproved' ||
-        report.dtrStatus == 'rejected';
+    final isDisapproved =
+        report.dtrStatus == 'disapproved' || report.dtrStatus == 'rejected';
     final isApproved =
-        isSubmitted && !isDisapproved && (report.dtrStatus == 'approved' || stage == 4);
+        isSubmitted &&
+        !isDisapproved &&
+        (report.dtrStatus == 'approved' || stage == 4);
     final active = isDisapproved
         ? colors.error
         : isApproved
@@ -368,11 +369,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     return SectionCard(
       title: 'Progress',
       action: StatusBadge(
-        label: r.isDisapproved
-            ? 'Disapproved'
-            : ReportsStore.stageLabels[stage - 1],
+        label: r.isDisapproved ? 'Disapproved' : ReportsStore.stageLabel(stage),
         kind: r.isDisapproved
             ? StatusColorKind.error
+            : stage == 0
+            ? StatusColorKind.neutral
             : done
             ? StatusColorKind.success
             : StatusColorKind.info,
